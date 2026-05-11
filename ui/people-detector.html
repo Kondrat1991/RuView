@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RuView People Detector</title>
+    <title>RuView Board Monitor</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             background: #0a0a0f;
-            color: #00d4aa;
+            color: #e0e0e0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
             min-height: 100vh;
         }
         
         .header {
-            background: linear-gradient(90deg, #0a0a0f 0%, #1a1a2e 100%);
-            border-bottom: 2px solid #00d4aa;
+            background: #12121a;
+            border-bottom: 1px solid #1a1a2e;
             padding: 20px 30px;
             display: flex;
             justify-content: space-between;
@@ -23,1032 +23,813 @@
         }
         
         .header h1 {
-            font-size: 24px;
-            font-weight: 300;
-            letter-spacing: 2px;
-        }
-        
-        .header h1 span {
-            color: #ff6b6b;
+            font-size: 20px;
             font-weight: 600;
         }
         
-        .status-bar {
+        .mode-indicator {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .mode-real {
+            background: #00d4aa;
+            color: #000;
+        }
+        
+        .mode-sim {
+            background: #ff6b00;
+            color: #000;
+        }
+        
+        .mode-offline {
+            background: #6b7280;
+            color: #fff;
+        }
+        
+        .stats-bar {
             display: flex;
+            gap: 30px;
+            padding: 20px 30px;
+            background: #0f0f15;
+            border-bottom: 1px solid #1a1a2e;
+        }
+        
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+        }
+        
+        .main {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+        }
+        
+        .board-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .board-card {
+            background: #12121a;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
             gap: 20px;
             align-items: center;
         }
         
-        .status-item {
-            text-align: center;
+        .board-card.active {
+            border-color: #00d4aa;
+            animation: active-pulse 2s infinite;
         }
         
-        .status-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #00d4aa;
+        @keyframes active-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 170, 0.2); }
+            50% { box-shadow: 0 0 20px 5px rgba(0, 212, 170, 0.1); }
         }
         
-        .status-label {
-            font-size: 10px;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .connection-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #00d4aa;
-            box-shadow: 0 0 10px #00d4aa;
-            animation: pulse 2s infinite;
-        }
-        
-        .connection-dot.offline {
-            background: #ff4444;
-            box-shadow: 0 0 10px #ff4444;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.2); }
-        }
-        
-        .main {
-            display: grid;
-            grid-template-columns: 1fr 350px;
-            gap: 0;
-            height: calc(100vh - 80px);
-        }
-        
-        .room-view {
-            position: relative;
-            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
-            overflow: hidden;
-        }
-        
-        .room-grid {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 600px;
-            height: 400px;
-            border: 2px solid #333;
-            background: 
-                linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px),
-                linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px);
-            background-size: 50px 50px;
-        }
-        
-        .room-label {
-            position: absolute;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            color: #444;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-        }
-        
-        .sensor-node {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            border: 2px solid #00d4aa;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 700;
-            background: rgba(0,212,170,0.1);
-            box-shadow: 0 0 20px rgba(0,212,170,0.3);
-        }
-        
-        .sensor-node::after {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 2px solid #00d4aa;
-            animation: ripple 2s infinite;
-        }
-        
-        @keyframes ripple {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(2); opacity: 0; }
-        }
-        
-        .person-dot {
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255,107,107,0.4) 0%, transparent 70%);
-            border: 2px solid #ff6b6b;
-            box-shadow: 0 0 20px rgba(255,107,107,0.5);
-            animation: person-pulse 2s infinite;
-            transition: all 0.5s ease;
-        }
-        
-        .person-label {
-            position: absolute;
-            top: -25px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255,107,107,0.9);
-            color: #000;
-            padding: 3px 10px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-        
-        #skeleton-canvas {
-            z-index: 10;
-        }
-        
-        @keyframes person-pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-        
-        .detection-zone {
-            position: absolute;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(0,212,170,0.1) 0%, transparent 70%);
-            border: 1px dashed rgba(0,212,170,0.3);
-            animation: zone-rotate 20s linear infinite;
-        }
-        
-        @keyframes zone-rotate {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-        
-        .sidebar {
-            background: #0f0f1a;
-            border-left: 1px solid #222;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        
-        .panel {
-            background: #151520;
-            border: 1px solid #222;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .panel-title {
-            font-size: 12px;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .panel-title::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: #00d4aa;
-            border-radius: 2px;
-        }
-        
-        .detection-status {
-            text-align: center;
-            padding: 30px 0;
-        }
-        
-        .detection-status .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
-        }
-        
-        .detection-status .count {
-            font-size: 72px;
-            font-weight: 700;
-            color: #00d4aa;
-            line-height: 1;
-        }
-        
-        .detection-status .count.has-people {
-            color: #ff6b6b;
-            text-shadow: 0 0 30px #ff6b6b;
-        }
-        
-        .detection-status .label {
-            font-size: 14px;
-            color: #666;
+        .movement-indicator {
             margin-top: 10px;
         }
         
-        .activity-list {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .activity-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 15px;
-            background: #1a1a25;
-            border-radius: 8px;
-            border-left: 3px solid #333;
-            transition: all 0.3s;
-        }
-        
-        .activity-item.active {
-            border-left-color: #00d4aa;
-            background: rgba(0,212,170,0.1);
-        }
-        
-        .activity-item.detected {
-            border-left-color: #ff6b6b;
-            background: rgba(255,107,107,0.1);
-        }
-        
-        .activity-name {
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .activity-confidence {
-            font-size: 12px;
-            color: #888;
-        }
-        
-        .vital-signs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        
-        .vital-card {
-            background: #1a1a25;
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-        }
-        
-        .vital-icon {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-        
-        .vital-value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #fff;
-        }
-        
-        .vital-value.heart {
-            color: #ff6b6b;
-        }
-        
-        .vital-value.breath {
-            color: #4ecdc4;
-        }
-        
-        .vital-unit {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .vital-label {
-            font-size: 10px;
-            color: #444;
-            text-transform: uppercase;
+        .variance-bar {
+            height: 6px;
+            background: #1a1a2e;
+            border-radius: 3px;
+            overflow: hidden;
             margin-top: 5px;
         }
         
-        .console-log {
-            background: #0a0a0f;
-            border: 1px solid #222;
-            border-radius: 8px;
-            padding: 15px;
+        .variance-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s, background-color 0.3s;
+        }
+        
+        .variance-low { background: #238636; }
+        .variance-medium { background: #d29922; }
+        .variance-high { background: #da3633; animation: pulse-alert 0.5s infinite; }
+        
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .movement-label {
             font-size: 11px;
-            font-family: 'Consolas', monospace;
-            max-height: 150px;
-            overflow-y: auto;
+            margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
         }
         
-        .log-entry {
-            margin: 3px 0;
-            color: #666;
+        .board-number {
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
         }
         
-        .log-entry.detected {
-            color: #ff6b6b;
+        .board-card.active .board-number {
+            background: #00d4aa;
+            color: #000;
         }
         
-        .log-entry.status {
+        .board-info h3 {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .board-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        
+        .board-status {
+            text-align: right;
+        }
+        
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        
+        .status-online {
+            background: rgba(0, 212, 170, 0.2);
             color: #00d4aa;
         }
         
+        .status-offline {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .data-stream {
+            background: #0d0d12;
+            border: 1px solid #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            font-family: monospace;
+            font-size: 11px;
+            height: 600px;
+            overflow-y: auto;
+        }
+        
+        .data-line {
+            padding: 4px 0;
+            border-bottom: 1px solid #1a1a2e;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .data-time {
+            color: #6b7280;
+            min-width: 60px;
+        }
+        
+        .data-node {
+            color: #58a6ff;
+            min-width: 50px;
+        }
+        
+        .data-rssi {
+            color: #00d4aa;
+            min-width: 60px;
+        }
+        
+        .data-detail {
+            color: #9ca3af;
+        }
+        
+        .connection-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #12121a;
+            border-top: 1px solid #1a1a2e;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .conn-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+        
+        .conn-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        
+        .conn-dot.online {
+            background: #00d4aa;
+            box-shadow: 0 0 10px #00d4aa;
+        }
+        
+        .conn-dot.offline {
+            background: #ff6b6b;
+        }
+        
+        .conn-dot.connecting {
+            background: #ff6b00;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
         button {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(90deg, #00d4aa 0%, #00a884 100%);
-            color: #0a0a0f;
+            padding: 10px 20px;
+            background: #238636;
+            color: #fff;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
         }
         
         button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0,212,170,0.4);
-        }
-        
-        button:disabled {
-            background: #333;
-            color: #666;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-        
-        .confidence-bar {
-            width: 100%;
-            height: 6px;
-            background: #222;
-            border-radius: 3px;
-            margin-top: 8px;
-            overflow: hidden;
-        }
-        
-        .confidence-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #00d4aa 0%, #00ff88 100%);
-            border-radius: 3px;
-            transition: width 0.5s ease;
-        }
-        
-        .confidence-fill.low {
-            background: linear-gradient(90deg, #ffaa00 0%, #ff6b00 100%);
+            background: #2ea043;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>π RuView <span>People Detector</span></h1>
-        <div class="status-bar">
-            <div class="mode-badge" id="mode-badge" style="
-                padding: 6px 14px;
-                border-radius: 20px;
-                font-size: 11px;
-                font-weight: 700;
-                text-transform: uppercase;
-                letter-spacing: 1px;
-                background: #ffaa00;
-                color: #000;
-                margin-right: 15px;
-            ">🔴 SIMULATION</div>
-            <div class="status-item">
-                <div class="status-value" id="node-count">0</div>
-                <div class="status-label">Sensors</div>
-            </div>
-            <div class="status-item">
-                <div class="status-value" id="fps">0</div>
-                <div class="status-label">FPS</div>
-            </div>
-            <div class="connection-dot" id="conn-status"></div>
+        <h1>π RuView Board Monitor</h1>
+        <div class="mode-indicator mode-sim" id="mode-badge">⚠️ SIMULATION</div>
+    </div>
+    
+    <div class="stats-bar">
+        <div class="stat">
+            <div class="stat-value" id="active-count">0</div>
+            <div class="stat-label">Active Boards</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="total-frames">0</div>
+            <div class="stat-label">Total Frames</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="data-rate">0</div>
+            <div class="stat-label">FPS</div>
         </div>
     </div>
     
     <div class="main">
-        <div class="room-view">
-            <div class="room-grid">
-                <div class="room-label">Detection Zone</div>
-                
-                <!-- Sensor nodes positioned around the room -->
-                <div class="sensor-node" style="top: -20px; left: 50%; transform: translateX(-50%);" title="Node 1">1</div>
-                <div class="sensor-node" style="bottom: 20px; left: -20px;" title="Node 2">2</div>
-                <div class="sensor-node" style="bottom: 20px; right: -20px;" title="Node 3">3</div>
-                <div class="sensor-node" style="top: 50%; right: -20px; transform: translateY(-50%); display: none;" id="node-4" title="Node 4">4</div>
-                
-                <!-- Detection zones -->
-                <div class="detection-zone" style="width: 300px; height: 300px; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
-                
-                <!-- Person dots (dynamically added) -->
-                <div id="people-container"></div>
-                
-                <!-- Skeleton Canvas for pose visualization -->
-                <canvas id="skeleton-canvas" width="600" height="400" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
-            </div>
+        <div class="board-list" id="board-list">
+            <!-- Boards will be rendered here -->
         </div>
         
-        <div class="sidebar">
-            <div class="panel">
-                <div class="panel-title">Detection Status</div>
-                <div class="detection-status">
-                    <div class="icon" id="status-icon">🔍</div>
-                    <div class="count" id="people-count">0</div>
-                    <div class="label" id="status-text">Scanning...</div>
-                    <div class="confidence-bar">
-                        <div class="confidence-fill" id="confidence-bar" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <div class="panel-title">Connected Plates</div>
-                <div class="plate-count" style="text-align: center; padding: 15px; border-bottom: 1px solid #222; margin-bottom: 15px;">
-                    <div style="font-size: 36px; font-weight: 700; color: #00d4aa;" id="plate-count">0</div>
-                    <div style="font-size: 11px; color: #666; text-transform: uppercase;">ESP32-S3 Active</div>
-                </div>
-                <div class="plate-list" id="plate-list">
-                    <div class="plate-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px;">
-                        <span style="display: flex; align-items: center; gap: 8px;">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
-                            <span>Waiting for data...</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <div class="panel-title">Activity Classification</div>
-                <div class="activity-list">
-                    <div class="activity-item" id="act-present">
-                        <span class="activity-name">👤 Presence</span>
-                        <span class="activity-confidence">0%</span>
-                    </div>
-                    <div class="activity-item" id="act-walking">
-                        <span class="activity-name">🚶 Walking</span>
-                        <span class="activity-confidence">0%</span>
-                    </div>
-                    <div class="activity-item" id="act-sitting">
-                        <span class="activity-name">🪑 Sitting</span>
-                        <span class="activity-confidence">0%</span>
-                    </div>
-                    <div class="activity-item" id="act-standing">
-                        <span class="activity-name">🧍 Standing</span>
-                        <span class="activity-confidence">0%</span>
-                    </div>
-                    <div class="activity-item" id="act-fall">
-                        <span class="activity-name">⚠️ Fall Detect</span>
-                        <span class="activity-confidence">0%</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <div class="panel-title">Vital Signs</div>
-                <div class="vital-signs">
-                    <div class="vital-card">
-                        <div class="vital-icon">❤️</div>
-                        <div class="vital-value heart" id="heart-rate">--</div>
-                        <div class="vital-unit">BPM</div>
-                        <div class="vital-label">Heart Rate</div>
-                    </div>
-                    <div class="vital-card">
-                        <div class="vital-icon">🫁</div>
-                        <div class="vital-value breath" id="breath-rate">--</div>
-                        <div class="vital-unit">RPM</div>
-                        <div class="vital-label">Breathing</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <div class="panel-title">Event Log</div>
-                <div class="console-log" id="event-log">
-                    <div class="log-entry status">System ready. Waiting for CSI data...</div>
-                </div>
-            </div>
-            
-            <button id="connect-btn" onclick="toggleConnection()">Start Detection</button>
+        <div class="data-stream" id="data-stream">
+            <div style="color: #6b7280; padding: 10px 0;">Waiting for data...</div>
         </div>
     </div>
-
+    
+    <div class="connection-bar">
+        <div class="conn-status">
+            <div class="conn-dot offline" id="conn-dot"></div>
+            <span id="conn-text">Disconnected</span>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="clear-btn" onclick="forceClear()" style="background: #6b7280;">Clear All</button>
+            <button id="connect-btn" onclick="toggleConnection()">Connect</button>
+        </div>
+    </div>
+    
     <script>
         const WS_URL = 'ws://localhost:3001/ws/sensing';
         let ws = null;
         let isConnected = false;
         let frameCount = 0;
-        let nodes = new Map();
-        let peopleDetected = 0;
-        let lastFrameTime = 0;
-        let realDataFrames = 0; // Track frames with real MAC addresses
+        let startTime = Date.now();
+        let boards = new Map();
+        let dataLog = [];
+        let maxLogLines = 100;
         
-        // Heartbeat - clear data if no frames for 5 seconds
+        // Movement detection
+        let csiHistory = new Map(); // Store CSI samples per board
+        let movementState = new Map(); // Current movement state per board
+        
+        // Track CSI signatures to detect simulation (real data changes over time)
+        let csiSignatures = new Map(); // Store last CSI checksum per node
+        let csiChangeCount = new Map(); // Count how many times CSI changed
+        
+        // Heartbeat to clear stale data
+        let lastDataTime = 0;
+        let lastRealDataTime = 0;
         setInterval(() => {
-            if (isConnected) {
-                const timeSinceLastFrame = Date.now() - lastFrameTime;
-                if (timeSinceLastFrame > 5000 && nodes.size > 0) {
-                    // No data for 5+ seconds, clear everything
-                    nodes.clear();
-                    document.getElementById('node-count').textContent = '0';
-                    document.getElementById('plate-count').textContent = '0';
-                    document.getElementById('fps').textContent = '0';
-                    updatePlateList();
-                    clearPeople();
-                    log('All plates offline - no data received', 'error');
-                }
+            const now = Date.now();
+            const timeSinceData = now - lastDataTime;
+            const timeSinceRealData = now - lastRealDataTime;
+            
+            // If no real data for 3 seconds, clear everything
+            if (timeSinceRealData > 3000 && boards.size > 0) {
+                boards.clear();
+                csiHistory.clear();
+                movementState.clear();
+                
+                // Reset mode badge
+                const modeBadge = document.getElementById('mode-badge');
+                modeBadge.textContent = '⚠️ OFFLINE';
+                modeBadge.className = 'mode-indicator mode-offline';
+                
+                // Reset stats
+                document.getElementById('active-count').textContent = '0';
+                
+                renderBoards();
+                logData('SYSTEM', 'All boards offline - no real data');
             }
-        }, 2000);
+        }, 1000);
         
         function toggleConnection() {
-            if (isConnected) {
-                disconnect();
-            } else {
-                connect();
-            }
+            if (isConnected) disconnect();
+            else connect();
+        }
+        
+        function forceClear() {
+            lastDataTime = 0;
+            lastRealDataTime = 0;
+            frameCount = 0;
+            startTime = Date.now();
+            boards.clear();
+            csiHistory.clear();
+            movementState.clear();
+            csiSignatures.clear();
+            csiChangeCount.clear();
+            dataLog = [];
+            
+            const modeBadge = document.getElementById('mode-badge');
+            modeBadge.textContent = '⚠️ OFFLINE';
+            modeBadge.className = 'mode-indicator mode-offline';
+            
+            document.getElementById('active-count').textContent = '0';
+            document.getElementById('total-frames').textContent = '0';
+            document.getElementById('data-rate').textContent = '0';
+            
+            renderBoards();
+            renderDataStream();
+            logData('SYSTEM', 'Manually cleared all data');
         }
         
         function connect() {
             const btn = document.getElementById('connect-btn');
-            const statusDot = document.getElementById('conn-status');
+            const dot = document.getElementById('conn-dot');
+            const text = document.getElementById('conn-text');
             
-            btn.disabled = true;
             btn.textContent = 'Connecting...';
+            btn.disabled = true;
+            dot.className = 'conn-dot connecting';
+            text.textContent = 'Connecting...';
             
             ws = new WebSocket(WS_URL);
             
             ws.onopen = () => {
                 isConnected = true;
-                statusDot.classList.remove('offline');
-                btn.textContent = 'Stop Detection';
+                dot.className = 'conn-dot online';
+                text.textContent = 'Connected';
+                btn.textContent = 'Disconnect';
                 btn.disabled = false;
-                log('Connected to sensing server', 'status');
-                frameCount = 0;
+                logData('SYSTEM', 'WebSocket connected');
             };
             
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    processSensingData(data);
+                    processData(data);
                 } catch (e) {
                     console.error('Parse error:', e);
                 }
             };
             
             ws.onerror = () => {
-                statusDot.classList.add('offline');
+                dot.className = 'conn-dot offline';
+                text.textContent = 'Error';
+                btn.textContent = 'Retry';
                 btn.disabled = false;
-                btn.textContent = 'Retry Connection';
-                log('Connection error', 'error');
             };
             
             ws.onclose = () => {
                 isConnected = false;
-                statusDot.classList.add('offline');
-                btn.textContent = 'Start Detection';
+                dot.className = 'conn-dot offline';
+                text.textContent = 'Disconnected';
+                btn.textContent = 'Connect';
                 btn.disabled = false;
-                log('Disconnected', 'error');
-                clearPeople();
+                lastDataTime = 0;
+                lastRealDataTime = 0;
+                boards.clear();
+                csiHistory.clear();
+                movementState.clear();
+                csiSignatures.clear();
+                csiChangeCount.clear();
                 
-                // Clear all plate data
-                nodes.clear();
-                document.getElementById('node-count').textContent = '0';
-                document.getElementById('plate-count').textContent = '0';
-                document.getElementById('fps').textContent = '0';
-                updatePlateList();
+                const modeBadge = document.getElementById('mode-badge');
+                modeBadge.textContent = '⚠️ OFFLINE';
+                modeBadge.className = 'mode-indicator mode-offline';
+                document.getElementById('active-count').textContent = '0';
+                
+                renderBoards();
             };
         }
         
         function disconnect() {
             if (ws) ws.close();
+            lastDataTime = 0;
+            lastRealDataTime = 0;
+            boards.clear();
+            csiHistory.clear();
+            movementState.clear();
+            csiSignatures.clear();
+            csiChangeCount.clear();
+            
+            // Reset mode badge
+            const modeBadge = document.getElementById('mode-badge');
+            modeBadge.textContent = '⚠️ OFFLINE';
+            modeBadge.className = 'mode-indicator mode-offline';
+            document.getElementById('active-count').textContent = '0';
+            
+            renderBoards();
         }
         
-        function processSensingData(data) {
+        function processData(data) {
             frameCount++;
-            lastFrameTime = Date.now();
+            const now = Date.now();
+            lastDataTime = now; // Track for heartbeat
             
-            // Update sensor count
-            let nodeCount = 0;
-            let nodeList = [];
+            const elapsed = (now - startTime) / 1000;
+            const fps = Math.round(frameCount / elapsed);
             
+            // Update stats
+            document.getElementById('total-frames').textContent = frameCount;
+            document.getElementById('data-rate').textContent = fps;
+            
+            // Debug: Log what we're receiving
+            console.log('WS Data:', { source: data.source, nodes: data.nodes?.length, node_updates: data.node_updates?.length, simulated: data.simulated, type: data.type });
+            
+            // Detect mode from server data - SIMPLE: trust source field
+            const serverSource = data.source || data.data_source || '';
+            const isSimulated = data.simulated === true || data.source === 'simulate' || data.type === 'simulation';
+            
+            // Real data if source is esp32 and not explicitly marked simulated
+            const isRealData = serverSource === 'esp32' && !isSimulated;
+            
+            console.log(`Source: ${serverSource}, isSimulated: ${isSimulated}`);
+            
+            // Don't trust source field - wait for node validation
+            
+            // Extract nodes from various data formats
+            let nodes = [];
             if (data.nodes && Array.isArray(data.nodes)) {
-                nodeList = data.nodes;
-                nodeCount = data.nodes.length;
-            } else if (data.node_id) {
-                nodeList = [data];
-                nodeCount = 1;
+                nodes = data.nodes;
             } else if (data.node_updates && Array.isArray(data.node_updates)) {
-                nodeList = data.node_updates;
-                nodeCount = data.node_updates.length;
+                nodes = data.node_updates;
+            } else if (data.node_id) {
+                nodes = [data];
             }
             
-            // Store node data
-            nodeList.forEach(node => {
+            // DEBUG: Show first node structure
+            if (nodes.length > 0) {
+                console.log('First node keys:', Object.keys(nodes[0]));
+                console.log('First node:', JSON.stringify(nodes[0]).substring(0, 200));
+            }
+            
+            // REAL DATA DETECTION: Track entropy variance over time
+            // Simulation has CONSISTENT entropy, real data has VARYING entropy
+            function calculateEntropy(values) {
+                if (values.length < 10) return 0;
+                const diffs = [];
+                for (let i = 1; i < values.length; i++) {
+                    diffs.push(Math.abs(values[i] - values[i-1]));
+                }
+                const mean = diffs.reduce((a,b) => a+b, 0) / diffs.length;
+                const variance = diffs.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) / diffs.length;
+                return Math.sqrt(variance);
+            }
+            
+            // Track entropy history per node
+            const realNodes = nodes.filter(n => {
+                const id = n.node_id || n.id;
+                const amplitude = n.amplitude || n.subcarrier_amplitudes || n.subcarriers || [];
+                const hasCSI = amplitude.length >= 52;
+                const validId = id > 0 && id < 100;
+                
+                const entropy = calculateEntropy(amplitude);
+                
+                // Store entropy in history
+                if (!csiHistory.has(id)) {
+                    csiHistory.set(id, []);
+                }
+                const history = csiHistory.get(id);
+                history.push(entropy);
+                if (history.length > 20) history.shift();
+                
+                // Calculate variance of entropy (how much entropy changes)
+                let entropyVariance = 0;
+                if (history.length >= 5) {
+                    const mean = history.reduce((a,b) => a+b, 0) / history.length;
+                    // Check if all values are identical (would cause NaN)
+                    const allSame = history.every(e => e === history[0]);
+                    if (!allSame && !isNaN(mean)) {
+                        entropyVariance = history.reduce((sum, e) => sum + Math.pow(e - mean, 2), 0) / history.length;
+                    }
+                }
+                
+                // Protect against NaN
+                if (isNaN(entropyVariance)) entropyVariance = 0;
+                if (isNaN(entropy)) entropy = 0;
+                
+                // Real data: entropy varies (high entropyVariance), Simulation: entropy consistent (low entropyVariance)
+                const hasVaryingEntropy = entropyVariance > 0.3; // Lowered threshold
+                const hasReasonableEntropy = entropy > 0.5; // Lowered threshold
+                
+                const isReal = serverSource === 'esp32' && hasCSI && validId && hasVaryingEntropy && hasReasonableEntropy;
+                
+                console.log(`Node ${id}: real=${isReal}, entropy=${entropy.toFixed(2)}, entropyVar=${entropyVariance.toFixed(2)}, samples=${history.length}`);
+                
+                return isReal;
+            });
+            
+            // Determine if we have real CSI data
+            const hasRealCSI = nodes.some(n => (n.amplitude || []).length >= 52);
+            const actuallyReal = realNodes.length > 0;
+            
+            console.log(`Real CSI nodes: ${realNodes.length} of ${nodes.length}, hasCSI=${hasRealCSI}`);
+            
+            // Update mode badge - show REAL if we have CSI data from ESP32 source
+            const modeBadge = document.getElementById('mode-badge');
+            if (actuallyReal && serverSource === 'esp32') {
+                modeBadge.textContent = '🟢 REAL DATA';
+                modeBadge.className = 'mode-indicator mode-real';
+                lastRealDataTime = now; // Track for heartbeat
+            } else if (isSimulated || !hasRealCSI) {
+                modeBadge.textContent = '⚠️ SIMULATION';
+                modeBadge.className = 'mode-indicator mode-sim';
+                console.log('Ignoring - no real CSI data');
+                return;
+            } else {
+                modeBadge.textContent = '⚠️ OFFLINE';
+                modeBadge.className = 'mode-indicator mode-offline';
+                return;
+            }
+            
+            // Update boards
+            let activeCount = 0;
+            realNodes.forEach(node => {
                 const id = node.node_id || node.id;
-                if (id) {
-                    nodes.set(id, { ...node, lastSeen: Date.now() });
+                if (!id) return;
+                
+                const board = boards.get(id) || {
+                    id: id,
+                    firstSeen: now,
+                    frameCount: 0
+                };
+                
+                board.lastSeen = now;
+                board.frameCount++;
+                // rssi_dbm from server is often 0 (fake), so show as "Unknown"
+                const rssiVal = node.rssi_dbm || node.rssi || node.last_rssi;
+                board.rssi = (rssiVal !== undefined && rssiVal !== 0) ? rssiVal : -100;
+                board.mac = node.mac_address || node.mac || 'Unknown';
+                board.channel = node.channel || '-';
+                
+                // Get subcarrier data for movement detection (use amplitude from server)
+                const subcarriers = node.amplitude || node.subcarrier_amplitudes || node.subcarriers || [];
+                board.subcarrierCount = subcarriers.length;
+                
+                boards.set(id, board);
+                activeCount++;
+                
+                // Update movement detection
+                updateMovementDetection(id, subcarriers);
+                
+                // Log data
+                const macShort = board.mac && board.mac !== 'Unknown' ? board.mac.substring(0, 8) : 'NO_MAC';
+                logData(id, `RSSI: ${board.rssi}dBm | MAC: ${macShort}...`);
+            });
+            
+            document.getElementById('active-count').textContent = activeCount;
+            
+            // Clean up old boards (inactive > 10s)
+            boards.forEach((board, id) => {
+                if (now - board.lastSeen > 10000) {
+                    boards.delete(id);
                 }
             });
             
-            // Update UI counts (use actual nodes map size, not just current data)
-            const activeNodeCount = nodes.size;
-            document.getElementById('node-count').textContent = activeNodeCount;
-            document.getElementById('plate-count').textContent = activeNodeCount;
-            
-            // Show sensor nodes on map
-            updateSensorDisplay(nodeCount);
-            
-            // Update plate status list
-            updatePlateList();
-            
-            // Check if data is simulated and update mode badge
-            const modeBadge = document.getElementById('mode-badge');
-            
-            // Count real data frames (with valid MAC)
-            const hasValidMac = data.nodes && data.nodes.some(n => 
-                n.mac_address && n.mac_address.length === 17 && 
-                n.mac_address !== '00:00:00:00:00:00'
-            ) || (data.mac_address && data.mac_address.length === 17);
-            
-            if (hasValidMac) {
-                realDataFrames++;
-            }
-            
-            // Determine mode: if we have real MAC addresses in data, it's real
-            const isRealData = realDataFrames > 2 || hasValidMac;
-            
-            if (isRealData) {
-                modeBadge.textContent = '🟢 REAL DATA';
-                modeBadge.style.background = '#00d4aa';
-                modeBadge.style.color = '#000';
-                document.getElementById('status-text').style.color = '';
-            } else {
-                modeBadge.textContent = '🔴 SIMULATION';
-                modeBadge.style.background = '#ffaa00';
-                modeBadge.style.color = '#000';
-                document.getElementById('status-text').textContent = 'SIMULATION MODE - No real plates';
-                document.getElementById('status-icon').textContent = '🤖';
-                document.getElementById('status-text').style.color = '#ffaa00';
-            }
-            
-            // Process classification data
-            if (data.classification) {
-                updateClassification(data.classification);
-            }
-            
-            // Process vital signs
-            if (data.vitals) {
-                updateVitals(data.vitals);
-            }
-            
-            // Update FPS
-            document.getElementById('fps').textContent = Math.min(60, frameCount % 60);
+            renderBoards();
         }
         
-        function updatePlateList() {
-            const listEl = document.getElementById('plate-list');
+        function renderBoards() {
+            const container = document.getElementById('board-list');
             
-            if (nodes.size === 0) {
-                listEl.innerHTML = `
-                    <div class="plate-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px;">
-                        <span style="display: flex; align-items: center; gap: 8px;">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
-                            <span style="color: #666;">Waiting for data...</span>
-                        </span>
+            if (boards.size === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 60px; color: #6b7280;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">📡</div>
+                        <p>No boards connected</p>
+                        <p style="font-size: 12px; margin-top: 10px;">Connect to start monitoring</p>
                     </div>
                 `;
                 return;
             }
             
-            listEl.innerHTML = '';
+            container.innerHTML = '';
             const now = Date.now();
             
-            nodes.forEach((node, id) => {
-                const age = (now - node.lastSeen) / 1000;
+            boards.forEach((board, id) => {
+                const age = (now - board.lastSeen) / 1000;
                 const isActive = age < 5;
-                const rssi = node.rssi || node.last_rssi || -70;
-                const statusColor = isActive ? '#00d4aa' : '#ff4444';
-                const statusText = isActive ? 'ONLINE' : 'OFFLINE';
-                const rssiText = isActive ? `${rssi} dBm` : '--';
                 
-                const item = document.createElement('div');
-                item.className = 'plate-item';
-                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ' + statusColor + ';';
-                item.innerHTML = `
-                    <span style="display: flex; align-items: center; gap: 10px;">
-                        <span style="width: 10px; height: 10px; border-radius: 50%; background: ${statusColor}; box-shadow: 0 0 8px ${statusColor};"></span>
-                        <span>
-                            <div style="font-weight: 600; color: #fff;">Plate ${id}</div>
-                            <div style="font-size: 11px; color: #888;">${rssiText} ${node.channel ? '| Ch ' + node.channel : ''}</div>
-                        </span>
-                    </span>
-                    <span style="font-size: 11px; font-weight: 600; color: ${statusColor}; padding: 4px 8px; background: rgba(0,0,0,0.3); border-radius: 4px;">${statusText}</span>
+                // Get movement state
+                const movement = movementState.get(id);
+                const hasMovement = movement && (now - movement.lastUpdate < 2000) && !isNaN(movement.score);
+                const score = hasMovement ? Math.round(movement.score) : 0;
+                const level = hasMovement ? movement.level : 'low';
+                
+                const macDisplay = board.mac && board.mac !== 'Unknown' ? board.mac : 'Not Available';
+                
+                const card = document.createElement('div');
+                card.className = `board-card ${isActive ? 'active' : ''}`;
+                card.innerHTML = `
+                    <div class="board-number">${id}</div>
+                    <div class="board-info">
+                        <h3>ESP32-S3 Node ${id}</h3>
+                        <div class="board-meta">
+                            MAC: ${macDisplay} | Ch: ${board.channel} | Frames: ${board.frameCount}
+                        </div>
+                        <div class="movement-indicator">
+                            <div class="variance-bar">
+                                <div class="variance-fill variance-${level}" style="width: ${score}%"></div>
+                            </div>
+                            <div class="movement-label">
+                                <span>${level === 'high' ? '🏃 MOVEMENT!' : level === 'medium' ? '👋 Activity' : '✓ Static'}</span>
+                                <span>${score}% variance</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="board-status">
+                        <div class="status-badge ${isActive ? 'status-online' : 'status-offline'}">
+                            ${isActive ? 'ONLINE' : 'STALE'}
+                        </div>
+                        <div style="font-size: 12px; color: #6b7280; margin-top: 5px;">
+                            ${board.rssi} dBm
+                        </div>
+                        ${hasMovement ? `<div style="font-size: 11px; color: ${level === 'high' ? '#da3633' : level === 'medium' ? '#d29922' : '#238636'}; margin-top: 3px;">
+                            ${board.subcarrierCount || 0} subcarriers
+                        </div>` : ''}
+                    </div>
                 `;
-                listEl.appendChild(item);
+                container.appendChild(card);
             });
         }
         
-        function updateClassification(classification) {
-            const presence = classification.presence || false;
-            const personCount = classification.person_count || classification.people_count || 0;
-            const confidence = (classification.confidence || 0) * 100;
+        function logData(nodeId, detail) {
+            const time = new Date().toLocaleTimeString('en-US', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
             
-            // Update people count display
-            const countEl = document.getElementById('people-count');
-            const statusText = document.getElementById('status-text');
-            const statusIcon = document.getElementById('status-icon');
-            const confBar = document.getElementById('confidence-bar');
-            
-            countEl.textContent = personCount;
-            confBar.style.width = confidence + '%';
-            
-            if (personCount > 0) {
-                countEl.classList.add('has-people');
-                statusText.textContent = personCount === 1 ? 'Person detected' : personCount + ' people detected';
-                statusIcon.textContent = '👤';
-                confBar.classList.remove('low');
-                
-                // Show people on map
-                showPeopleOnMap(personCount);
-                
-                if (peopleDetected !== personCount) {
-                    log('Detected ' + personCount + ' person(s) in room', 'detected');
-                    peopleDetected = personCount;
-                }
-            } else {
-                countEl.classList.remove('has-people');
-                statusText.textContent = presence ? 'Presence uncertain' : 'Room empty';
-                statusIcon.textContent = presence ? '⚠️' : '🔍';
-                confBar.classList.add('low');
-                clearPeople();
-                peopleDetected = 0;
+            dataLog.unshift({ time, nodeId, detail });
+            if (dataLog.length > maxLogLines) {
+                dataLog.pop();
             }
             
-            // Update activity items
-            const activities = classification.activities || classification.activity_scores || {};
-            updateActivity('act-present', presence ? 100 : confidence);
-            updateActivity('act-walking', activities.walking || 0);
-            updateActivity('act-sitting', activities.sitting || 0);
-            updateActivity('act-standing', activities.standing || 0);
-            updateActivity('act-fall', activities.fall || activities.fallen || 0);
+            renderDataStream();
         }
         
-        function updateActivity(id, confidence) {
-            const el = document.getElementById(id);
-            const confEl = el.querySelector('.activity-confidence');
-            const confPct = Math.round(confidence * 100) / 100;
-            confEl.textContent = confPct + '%';
+        function renderDataStream() {
+            const container = document.getElementById('data-stream');
             
-            el.classList.remove('active', 'detected');
-            if (confPct > 70) {
-                el.classList.add('detected');
-            } else if (confPct > 30) {
-                el.classList.add('active');
-            }
-        }
-        
-        function updateVitals(vitals) {
-            const hr = vitals.heart_rate || vitals.hr || '--';
-            const br = vitals.breathing_rate || vitals.br || vitals.respiration || '--';
-            
-            document.getElementById('heart-rate').textContent = hr;
-            document.getElementById('breath-rate').textContent = br;
-        }
-        
-        function updateSensorDisplay(count) {
-            // Show/hide sensor nodes based on count
-            for (let i = 1; i <= 4; i++) {
-                const node = document.querySelector(`.sensor-node:nth-of-type(${i})`);
-                if (node) {
-                    node.style.opacity = i <= count ? '1' : '0.3';
-                }
-            }
-        }
-        
-        function showPeopleOnMap(count) {
-            const container = document.getElementById('people-container');
-            
-            // Clear existing dots
-            container.innerHTML = '';
-            
-            // Add people dots with labels
-            const positions = [
-                { x: 50, y: 60 },
-                { x: 35, y: 55 },
-                { x: 65, y: 55 },
-                { x: 50, y: 45 }
-            ];
-            
-            for (let i = 0; i < count && i < 4; i++) {
-                const dot = document.createElement('div');
-                dot.className = 'person-dot';
-                dot.style.left = positions[i].x + '%';
-                dot.style.top = positions[i].y + '%';
-                dot.style.animationDelay = (i * 0.3) + 's';
-                
-                const label = document.createElement('div');
-                label.className = 'person-label';
-                label.textContent = 'Person ' + (i + 1);
-                dot.appendChild(label);
-                
-                container.appendChild(dot);
-            }
-            
-            // Trigger skeleton drawing
-            updatePeoplePositions(count);
-        }
-        
-        function clearPeople() {
-            document.getElementById('people-container').innerHTML = '';
-            updatePeoplePositions(0);
-        }
-        
-        function log(message, type = 'status') {
-            const logEl = document.getElementById('event-log');
-            const entry = document.createElement('div');
-            entry.className = 'log-entry ' + type;
-            const time = new Date().toLocaleTimeString();
-            entry.textContent = `[${time}] ${message}`;
-            logEl.insertBefore(entry, logEl.firstChild);
-            
-            // Keep only last 20 entries
-            while (logEl.children.length > 20) {
-                logEl.removeChild(logEl.lastChild);
-            }
-        }
-        
-        // Canvas and skeleton drawing
-        let skeletonCanvas = null;
-        let skeletonCtx = null;
-        let detectedPeople = [];
-        
-        function initCanvas() {
-            skeletonCanvas = document.getElementById('skeleton-canvas');
-            if (!skeletonCanvas) return;
-            skeletonCtx = skeletonCanvas.getContext('2d');
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            requestAnimationFrame(animateSkeletons);
-        }
-        
-        function resizeCanvas() {
-            if (!skeletonCanvas) return;
-            const container = skeletonCanvas.parentElement;
-            skeletonCanvas.width = container.clientWidth;
-            skeletonCanvas.height = container.clientHeight;
-        }
-        
-        function drawSkeleton(person, time) {
-            if (!skeletonCtx) return;
-            
-            const ctx = skeletonCtx;
-            const x = person.x * skeletonCanvas.width / 100;
-            const y = person.y * skeletonCanvas.height / 100;
-            const scale = 0.8;
-            
-            // Breathing animation
-            const breath = Math.sin(time * 0.003 + person.id) * 0.05 + 1;
-            
-            ctx.strokeStyle = '#ff6b6b';
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            // Glow effect
-            ctx.shadowColor = '#ff6b6b';
-            ctx.shadowBlur = 10;
-            
-            // HEAD (circle)
-            ctx.fillStyle = '#ff6b6b';
-            ctx.beginPath();
-            ctx.arc(x, y - 60 * scale * breath, 12 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // TORSO (line from head to hips)
-            ctx.beginPath();
-            ctx.moveTo(x, y - 60 * scale * breath);
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            
-            // HIPS (small circle)
-            ctx.beginPath();
-            ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // LEFT LEG
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x - 15 * scale, y + 40 * scale); // thigh
-            ctx.lineTo(x - 20 * scale, y + 80 * scale); // shin
-            ctx.stroke();
-            
-            // LEFT FOOT
-            ctx.fillStyle = '#ff8888';
-            ctx.beginPath();
-            ctx.arc(x - 20 * scale, y + 80 * scale, 6 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // RIGHT LEG
-            ctx.strokeStyle = '#ff6b6b';
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + 15 * scale, y + 40 * scale); // thigh
-            ctx.lineTo(x + 20 * scale, y + 80 * scale); // shin
-            ctx.stroke();
-            
-            // RIGHT FOOT
-            ctx.fillStyle = '#ff8888';
-            ctx.beginPath();
-            ctx.arc(x + 20 * scale, y + 80 * scale, 6 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // LEFT ARM
-            const armSwing = Math.sin(time * 0.002 + person.id * 2) * 10;
-            ctx.strokeStyle = '#ff6b6b';
-            ctx.beginPath();
-            ctx.moveTo(x, y - 40 * scale * breath);
-            ctx.lineTo(x - 25 * scale, y - 20 * scale + armSwing); // upper arm
-            ctx.lineTo(x - 35 * scale, y + 10 * scale + armSwing); // forearm
-            ctx.stroke();
-            
-            // LEFT HAND
-            ctx.fillStyle = '#ff8888';
-            ctx.beginPath();
-            ctx.arc(x - 35 * scale, y + 10 * scale + armSwing, 5 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // RIGHT ARM
-            ctx.beginPath();
-            ctx.moveTo(x, y - 40 * scale * breath);
-            ctx.lineTo(x + 25 * scale, y - 20 * scale - armSwing); // upper arm
-            ctx.lineTo(x + 35 * scale, y + 10 * scale - armSwing); // forearm
-            ctx.stroke();
-            
-            // RIGHT HAND
-            ctx.beginPath();
-            ctx.arc(x + 35 * scale, y + 10 * scale - armSwing, 5 * scale, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Reset shadow
-            ctx.shadowBlur = 0;
-            
-            // Draw joint labels
-            ctx.fillStyle = '#00d4aa';
-            ctx.font = '10px monospace';
-            ctx.fillText('HEAD', x + 20, y - 60 * scale * breath);
-            ctx.fillText('L-ARM', x - 50, y - 20 * scale + armSwing);
-            ctx.fillText('R-ARM', x + 40, y - 20 * scale - armSwing);
-            ctx.fillText('L-LEG', x - 30, y + 40 * scale);
-            ctx.fillText('R-LEG', x + 25, y + 40 * scale);
-        }
-        
-        function animateSkeletons(time) {
-            if (!skeletonCtx || !skeletonCanvas) {
-                requestAnimationFrame(animateSkeletons);
+            if (dataLog.length === 0) {
+                container.innerHTML = '<div style="color: #6b7280; padding: 10px 0;">Waiting for data...</div>';
                 return;
             }
             
-            // Clear canvas
-            skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+            container.innerHTML = dataLog.map(line => `
+                <div class="data-line">
+                    <span class="data-time">${line.time}</span>
+                    <span class="data-node">[${line.nodeId}]</span>
+                    <span class="data-detail">${line.detail}</span>
+                </div>
+            `).join('');
             
-            // Draw each detected person
-            detectedPeople.forEach(person => {
-                drawSkeleton(person, time);
-            });
-            
-            requestAnimationFrame(animateSkeletons);
+            container.scrollTop = 0;
         }
         
-        function updatePeoplePositions(count) {
-            // Update positions array based on count
-            const positions = [
-                { x: 50, y: 60 },
-                { x: 35, y: 55 },
-                { x: 65, y: 55 },
-                { x: 50, y: 45 }
-            ];
+        // Movement Detection Functions
+        function updateMovementDetection(nodeId, subcarriers) {
+            if (!subcarriers || subcarriers.length === 0) return;
             
-            detectedPeople = [];
-            for (let i = 0; i < count && i < 4; i++) {
-                detectedPeople.push({
-                    id: i,
-                    x: positions[i].x,
-                    y: positions[i].y
+            // Initialize history for this node
+            if (!csiHistory.has(nodeId)) {
+                csiHistory.set(nodeId, []);
+            }
+            
+            const history = csiHistory.get(nodeId);
+            
+            // Calculate average amplitude of subcarriers
+            const avgAmplitude = subcarriers.reduce((a, b) => a + b, 0) / subcarriers.length;
+            
+            // Calculate variance (spread of values)
+            const variance = calculateVariance(subcarriers);
+            
+            // Add to history
+            history.push({
+                timestamp: Date.now(),
+                avgAmplitude: avgAmplitude,
+                variance: variance
+            });
+            
+            // Keep only last 20 samples (about 1 second at 20fps)
+            if (history.length > 20) {
+                history.shift();
+            }
+            
+            // Detect movement from variance changes
+            if (history.length >= 10) {
+                const recent = history.slice(-5); // Last 5 samples
+                const older = history.slice(-10, -5); // Previous 5 samples
+                
+                const recentVar = average(recent.map(h => h.variance));
+                const olderVar = average(older.map(h => h.variance));
+                
+                // Movement score based on variance difference
+                let movementScore = 0;
+                if (!isNaN(recentVar) && !isNaN(olderVar)) {
+                    const varDiff = Math.abs(recentVar - olderVar);
+                    movementScore = Math.min(100, (varDiff / 50) * 100); // Normalize to 0-100%
+                }
+                
+                // Determine level
+                let level = 'low';
+                if (movementScore > 30) level = 'high';
+                else if (movementScore > 10) level = 'medium';
+                
+                movementState.set(nodeId, {
+                    score: movementScore,
+                    level: level,
+                    recentVariance: recentVar,
+                    lastUpdate: Date.now()
                 });
             }
         }
         
+        function calculateVariance(values) {
+            if (values.length < 2) return 0;
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            if (isNaN(mean)) return 0;
+            const squaredDiffs = values.map(v => Math.pow(v - mean, 2));
+            const result = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / values.length);
+            return isNaN(result) ? 0 : result;
+        }
+        
+        function average(values) {
+            if (values.length === 0) return 0;
+            const result = values.reduce((a, b) => a + b, 0) / values.length;
+            return isNaN(result) ? 0 : result;
+        }
+        
         // Auto-connect on load
         window.onload = () => {
-            initCanvas();
-            setTimeout(connect, 1000);
+            setTimeout(connect, 500);
         };
     </script>
 </body>
