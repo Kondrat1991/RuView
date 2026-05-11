@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuView People Detector</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #00d4aa;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(90deg, #0a0a0f 0%, #1a1a2e 100%);
+            border-bottom: 2px solid #00d4aa;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        
+        .header h1 span {
+            color: #ff6b6b;
+            font-weight: 600;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .status-item {
+            text-align: center;
+        }
+        
+        .status-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #00d4aa;
+        }
+        
+        .status-label {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .connection-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00d4aa;
+            box-shadow: 0 0 10px #00d4aa;
+            animation: pulse 2s infinite;
+        }
+        
+        .connection-dot.offline {
+            background: #ff4444;
+            box-shadow: 0 0 10px #ff4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 0;
+            height: calc(100vh - 80px);
+        }
+        
+        .room-view {
+            position: relative;
+            background: radial-gradient(ellipse at center, #1a1a2e 0%, #0a0a0f 100%);
+            overflow: hidden;
+        }
+        
+        .room-grid {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 400px;
+            border: 2px solid #333;
+            background: 
+                linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px),
+                linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        
+        .room-label {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .sensor-node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid #00d4aa;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            background: rgba(0,212,170,0.1);
+            box-shadow: 0 0 20px rgba(0,212,170,0.3);
+        }
+        
+        .sensor-node::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid #00d4aa;
+            animation: ripple 2s infinite;
+        }
+        
+        @keyframes ripple {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        
+        .person-dot {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,107,107,0.4) 0%, transparent 70%);
+            border: 2px solid #ff6b6b;
+            box-shadow: 0 0 20px rgba(255,107,107,0.5);
+            animation: person-pulse 2s infinite;
+            transition: all 0.5s ease;
+        }
+        
+        .person-label {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,107,107,0.9);
+            color: #000;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        
+        #skeleton-canvas {
+            z-index: 10;
+        }
+        
+        @keyframes person-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .detection-zone {
+            position: absolute;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,212,170,0.1) 0%, transparent 70%);
+            border: 1px dashed rgba(0,212,170,0.3);
+            animation: zone-rotate 20s linear infinite;
+        }
+        
+        @keyframes zone-rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .sidebar {
+            background: #0f0f1a;
+            border-left: 1px solid #222;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .panel {
+            background: #151520;
+            border: 1px solid #222;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel-title {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel-title::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #00d4aa;
+            border-radius: 2px;
+        }
+        
+        .detection-status {
+            text-align: center;
+            padding: 30px 0;
+        }
+        
+        .detection-status .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .detection-status .count {
+            font-size: 72px;
+            font-weight: 700;
+            color: #00d4aa;
+            line-height: 1;
+        }
+        
+        .detection-status .count.has-people {
+            color: #ff6b6b;
+            text-shadow: 0 0 30px #ff6b6b;
+        }
+        
+        .detection-status .label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .activity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #1a1a25;
+            border-radius: 8px;
+            border-left: 3px solid #333;
+            transition: all 0.3s;
+        }
+        
+        .activity-item.active {
+            border-left-color: #00d4aa;
+            background: rgba(0,212,170,0.1);
+        }
+        
+        .activity-item.detected {
+            border-left-color: #ff6b6b;
+            background: rgba(255,107,107,0.1);
+        }
+        
+        .activity-name {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .activity-confidence {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .vital-signs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .vital-card {
+            background: #1a1a25;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .vital-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .vital-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .vital-value.heart {
+            color: #ff6b6b;
+        }
+        
+        .vital-value.breath {
+            color: #4ecdc4;
+        }
+        
+        .vital-unit {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .vital-label {
+            font-size: 10px;
+            color: #444;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        
+        .console-log {
+            background: #0a0a0f;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 15px;
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .log-entry {
+            margin: 3px 0;
+            color: #666;
+        }
+        
+        .log-entry.detected {
+            color: #ff6b6b;
+        }
+        
+        .log-entry.status {
+            color: #00d4aa;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(90deg, #00d4aa 0%, #00a884 100%);
+            color: #0a0a0f;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0,212,170,0.4);
+        }
+        
+        button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .confidence-bar {
+            width: 100%;
+            height: 6px;
+            background: #222;
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4aa 0%, #00ff88 100%);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        
+        .confidence-fill.low {
+            background: linear-gradient(90deg, #ffaa00 0%, #ff6b00 100%);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>π RuView <span>People Detector</span></h1>
+        <div class="status-bar">
+            <div class="mode-badge" id="mode-badge" style="
+                padding: 6px 14px;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                background: #ffaa00;
+                color: #000;
+                margin-right: 15px;
+            ">🔴 SIMULATION</div>
+            <div class="status-item">
+                <div class="status-value" id="node-count">0</div>
+                <div class="status-label">Sensors</div>
+            </div>
+            <div class="status-item">
+                <div class="status-value" id="fps">0</div>
+                <div class="status-label">FPS</div>
+            </div>
+            <div class="connection-dot" id="conn-status"></div>
+        </div>
+    </div>
+    
+    <div class="main">
+        <div class="room-view">
+            <div class="room-grid">
+                <div class="room-label">Detection Zone</div>
+                
+                <!-- Sensor nodes positioned around the room -->
+                <div class="sensor-node" style="top: -20px; left: 50%; transform: translateX(-50%);" title="Node 1">1</div>
+                <div class="sensor-node" style="bottom: 20px; left: -20px;" title="Node 2">2</div>
+                <div class="sensor-node" style="bottom: 20px; right: -20px;" title="Node 3">3</div>
+                <div class="sensor-node" style="top: 50%; right: -20px; transform: translateY(-50%); display: none;" id="node-4" title="Node 4">4</div>
+                
+                <!-- Detection zones -->
+                <div class="detection-zone" style="width: 300px; height: 300px; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
+                
+                <!-- Person dots (dynamically added) -->
+                <div id="people-container"></div>
+                
+                <!-- Skeleton Canvas for pose visualization -->
+                <canvas id="skeleton-canvas" width="600" height="400" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="panel">
+                <div class="panel-title">Detection Status</div>
+                <div class="detection-status">
+                    <div class="icon" id="status-icon">🔍</div>
+                    <div class="count" id="people-count">0</div>
+                    <div class="label" id="status-text">Scanning...</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidence-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Connected Plates</div>
+                <div class="plate-count" style="text-align: center; padding: 15px; border-bottom: 1px solid #222; margin-bottom: 15px;">
+                    <div style="font-size: 36px; font-weight: 700; color: #00d4aa;" id="plate-count">0</div>
+                    <div style="font-size: 11px; color: #666; text-transform: uppercase;">ESP32-S3 Active</div>
+                </div>
+                <div class="plate-list" id="plate-list">
+                    <div class="plate-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                            <span>Waiting for data...</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Activity Classification</div>
+                <div class="activity-list">
+                    <div class="activity-item" id="act-present">
+                        <span class="activity-name">👤 Presence</span>
+                        <span class="activity-confidence">0%</span>
+                    </div>
+                    <div class="activity-item" id="act-walking">
+                        <span class="activity-name">🚶 Walking</span>
+                        <span class="activity-confidence">0%</span>
+                    </div>
+                    <div class="activity-item" id="act-sitting">
+                        <span class="activity-name">🪑 Sitting</span>
+                        <span class="activity-confidence">0%</span>
+                    </div>
+                    <div class="activity-item" id="act-standing">
+                        <span class="activity-name">🧍 Standing</span>
+                        <span class="activity-confidence">0%</span>
+                    </div>
+                    <div class="activity-item" id="act-fall">
+                        <span class="activity-name">⚠️ Fall Detect</span>
+                        <span class="activity-confidence">0%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Vital Signs</div>
+                <div class="vital-signs">
+                    <div class="vital-card">
+                        <div class="vital-icon">❤️</div>
+                        <div class="vital-value heart" id="heart-rate">--</div>
+                        <div class="vital-unit">BPM</div>
+                        <div class="vital-label">Heart Rate</div>
+                    </div>
+                    <div class="vital-card">
+                        <div class="vital-icon">🫁</div>
+                        <div class="vital-value breath" id="breath-rate">--</div>
+                        <div class="vital-unit">RPM</div>
+                        <div class="vital-label">Breathing</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-title">Event Log</div>
+                <div class="console-log" id="event-log">
+                    <div class="log-entry status">System ready. Waiting for CSI data...</div>
+                </div>
+            </div>
+            
+            <button id="connect-btn" onclick="toggleConnection()">Start Detection</button>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = 'ws://localhost:3001/ws/sensing';
+        let ws = null;
+        let isConnected = false;
+        let frameCount = 0;
+        let nodes = new Map();
+        let peopleDetected = 0;
+        let lastFrameTime = 0;
+        let realDataFrames = 0; // Track frames with real MAC addresses
+        
+        // Heartbeat - clear data if no frames for 5 seconds
+        setInterval(() => {
+            if (isConnected) {
+                const timeSinceLastFrame = Date.now() - lastFrameTime;
+                if (timeSinceLastFrame > 5000 && nodes.size > 0) {
+                    // No data for 5+ seconds, clear everything
+                    nodes.clear();
+                    document.getElementById('node-count').textContent = '0';
+                    document.getElementById('plate-count').textContent = '0';
+                    document.getElementById('fps').textContent = '0';
+                    updatePlateList();
+                    clearPeople();
+                    log('All plates offline - no data received', 'error');
+                }
+            }
+        }, 2000);
+        
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+        
+        function connect() {
+            const btn = document.getElementById('connect-btn');
+            const statusDot = document.getElementById('conn-status');
+            
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+            
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                isConnected = true;
+                statusDot.classList.remove('offline');
+                btn.textContent = 'Stop Detection';
+                btn.disabled = false;
+                log('Connected to sensing server', 'status');
+                frameCount = 0;
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    processSensingData(data);
+                } catch (e) {
+                    console.error('Parse error:', e);
+                }
+            };
+            
+            ws.onerror = () => {
+                statusDot.classList.add('offline');
+                btn.disabled = false;
+                btn.textContent = 'Retry Connection';
+                log('Connection error', 'error');
+            };
+            
+            ws.onclose = () => {
+                isConnected = false;
+                statusDot.classList.add('offline');
+                btn.textContent = 'Start Detection';
+                btn.disabled = false;
+                log('Disconnected', 'error');
+                clearPeople();
+                
+                // Clear all plate data
+                nodes.clear();
+                document.getElementById('node-count').textContent = '0';
+                document.getElementById('plate-count').textContent = '0';
+                document.getElementById('fps').textContent = '0';
+                updatePlateList();
+            };
+        }
+        
+        function disconnect() {
+            if (ws) ws.close();
+        }
+        
+        function processSensingData(data) {
+            frameCount++;
+            lastFrameTime = Date.now();
+            
+            // Update sensor count
+            let nodeCount = 0;
+            let nodeList = [];
+            
+            if (data.nodes && Array.isArray(data.nodes)) {
+                nodeList = data.nodes;
+                nodeCount = data.nodes.length;
+            } else if (data.node_id) {
+                nodeList = [data];
+                nodeCount = 1;
+            } else if (data.node_updates && Array.isArray(data.node_updates)) {
+                nodeList = data.node_updates;
+                nodeCount = data.node_updates.length;
+            }
+            
+            // Store node data
+            nodeList.forEach(node => {
+                const id = node.node_id || node.id;
+                if (id) {
+                    nodes.set(id, { ...node, lastSeen: Date.now() });
+                }
+            });
+            
+            // Update UI counts (use actual nodes map size, not just current data)
+            const activeNodeCount = nodes.size;
+            document.getElementById('node-count').textContent = activeNodeCount;
+            document.getElementById('plate-count').textContent = activeNodeCount;
+            
+            // Show sensor nodes on map
+            updateSensorDisplay(nodeCount);
+            
+            // Update plate status list
+            updatePlateList();
+            
+            // Check if data is simulated and update mode badge
+            const modeBadge = document.getElementById('mode-badge');
+            
+            // Count real data frames (with valid MAC)
+            const hasValidMac = data.nodes && data.nodes.some(n => 
+                n.mac_address && n.mac_address.length === 17 && 
+                n.mac_address !== '00:00:00:00:00:00'
+            ) || (data.mac_address && data.mac_address.length === 17);
+            
+            if (hasValidMac) {
+                realDataFrames++;
+            }
+            
+            // Determine mode: if we have real MAC addresses in data, it's real
+            const isRealData = realDataFrames > 2 || hasValidMac;
+            
+            if (isRealData) {
+                modeBadge.textContent = '🟢 REAL DATA';
+                modeBadge.style.background = '#00d4aa';
+                modeBadge.style.color = '#000';
+                document.getElementById('status-text').style.color = '';
+            } else {
+                modeBadge.textContent = '🔴 SIMULATION';
+                modeBadge.style.background = '#ffaa00';
+                modeBadge.style.color = '#000';
+                document.getElementById('status-text').textContent = 'SIMULATION MODE - No real plates';
+                document.getElementById('status-icon').textContent = '🤖';
+                document.getElementById('status-text').style.color = '#ffaa00';
+            }
+            
+            // Process classification data
+            if (data.classification) {
+                updateClassification(data.classification);
+            }
+            
+            // Process vital signs
+            if (data.vitals) {
+                updateVitals(data.vitals);
+            }
+            
+            // Update FPS
+            document.getElementById('fps').textContent = Math.min(60, frameCount % 60);
+        }
+        
+        function updatePlateList() {
+            const listEl = document.getElementById('plate-list');
+            
+            if (nodes.size === 0) {
+                listEl.innerHTML = `
+                    <div class="plate-item" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: #333;"></span>
+                            <span style="color: #666;">Waiting for data...</span>
+                        </span>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = '';
+            const now = Date.now();
+            
+            nodes.forEach((node, id) => {
+                const age = (now - node.lastSeen) / 1000;
+                const isActive = age < 5;
+                const rssi = node.rssi || node.last_rssi || -70;
+                const statusColor = isActive ? '#00d4aa' : '#ff4444';
+                const statusText = isActive ? 'ONLINE' : 'OFFLINE';
+                const rssiText = isActive ? `${rssi} dBm` : '--';
+                
+                const item = document.createElement('div');
+                item.className = 'plate-item';
+                item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ' + statusColor + ';';
+                item.innerHTML = `
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <span style="width: 10px; height: 10px; border-radius: 50%; background: ${statusColor}; box-shadow: 0 0 8px ${statusColor};"></span>
+                        <span>
+                            <div style="font-weight: 600; color: #fff;">Plate ${id}</div>
+                            <div style="font-size: 11px; color: #888;">${rssiText} ${node.channel ? '| Ch ' + node.channel : ''}</div>
+                        </span>
+                    </span>
+                    <span style="font-size: 11px; font-weight: 600; color: ${statusColor}; padding: 4px 8px; background: rgba(0,0,0,0.3); border-radius: 4px;">${statusText}</span>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+        
+        function updateClassification(classification) {
+            const presence = classification.presence || false;
+            const personCount = classification.person_count || classification.people_count || 0;
+            const confidence = (classification.confidence || 0) * 100;
+            
+            // Update people count display
+            const countEl = document.getElementById('people-count');
+            const statusText = document.getElementById('status-text');
+            const statusIcon = document.getElementById('status-icon');
+            const confBar = document.getElementById('confidence-bar');
+            
+            countEl.textContent = personCount;
+            confBar.style.width = confidence + '%';
+            
+            if (personCount > 0) {
+                countEl.classList.add('has-people');
+                statusText.textContent = personCount === 1 ? 'Person detected' : personCount + ' people detected';
+                statusIcon.textContent = '👤';
+                confBar.classList.remove('low');
+                
+                // Show people on map
+                showPeopleOnMap(personCount);
+                
+                if (peopleDetected !== personCount) {
+                    log('Detected ' + personCount + ' person(s) in room', 'detected');
+                    peopleDetected = personCount;
+                }
+            } else {
+                countEl.classList.remove('has-people');
+                statusText.textContent = presence ? 'Presence uncertain' : 'Room empty';
+                statusIcon.textContent = presence ? '⚠️' : '🔍';
+                confBar.classList.add('low');
+                clearPeople();
+                peopleDetected = 0;
+            }
+            
+            // Update activity items
+            const activities = classification.activities || classification.activity_scores || {};
+            updateActivity('act-present', presence ? 100 : confidence);
+            updateActivity('act-walking', activities.walking || 0);
+            updateActivity('act-sitting', activities.sitting || 0);
+            updateActivity('act-standing', activities.standing || 0);
+            updateActivity('act-fall', activities.fall || activities.fallen || 0);
+        }
+        
+        function updateActivity(id, confidence) {
+            const el = document.getElementById(id);
+            const confEl = el.querySelector('.activity-confidence');
+            const confPct = Math.round(confidence * 100) / 100;
+            confEl.textContent = confPct + '%';
+            
+            el.classList.remove('active', 'detected');
+            if (confPct > 70) {
+                el.classList.add('detected');
+            } else if (confPct > 30) {
+                el.classList.add('active');
+            }
+        }
+        
+        function updateVitals(vitals) {
+            const hr = vitals.heart_rate || vitals.hr || '--';
+            const br = vitals.breathing_rate || vitals.br || vitals.respiration || '--';
+            
+            document.getElementById('heart-rate').textContent = hr;
+            document.getElementById('breath-rate').textContent = br;
+        }
+        
+        function updateSensorDisplay(count) {
+            // Show/hide sensor nodes based on count
+            for (let i = 1; i <= 4; i++) {
+                const node = document.querySelector(`.sensor-node:nth-of-type(${i})`);
+                if (node) {
+                    node.style.opacity = i <= count ? '1' : '0.3';
+                }
+            }
+        }
+        
+        function showPeopleOnMap(count) {
+            const container = document.getElementById('people-container');
+            
+            // Clear existing dots
+            container.innerHTML = '';
+            
+            // Add people dots with labels
+            const positions = [
+                { x: 50, y: 60 },
+                { x: 35, y: 55 },
+                { x: 65, y: 55 },
+                { x: 50, y: 45 }
+            ];
+            
+            for (let i = 0; i < count && i < 4; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'person-dot';
+                dot.style.left = positions[i].x + '%';
+                dot.style.top = positions[i].y + '%';
+                dot.style.animationDelay = (i * 0.3) + 's';
+                
+                const label = document.createElement('div');
+                label.className = 'person-label';
+                label.textContent = 'Person ' + (i + 1);
+                dot.appendChild(label);
+                
+                container.appendChild(dot);
+            }
+            
+            // Trigger skeleton drawing
+            updatePeoplePositions(count);
+        }
+        
+        function clearPeople() {
+            document.getElementById('people-container').innerHTML = '';
+            updatePeoplePositions(0);
+        }
+        
+        function log(message, type = 'status') {
+            const logEl = document.getElementById('event-log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logEl.insertBefore(entry, logEl.firstChild);
+            
+            // Keep only last 20 entries
+            while (logEl.children.length > 20) {
+                logEl.removeChild(logEl.lastChild);
+            }
+        }
+        
+        // Canvas and skeleton drawing
+        let skeletonCanvas = null;
+        let skeletonCtx = null;
+        let detectedPeople = [];
+        
+        function initCanvas() {
+            skeletonCanvas = document.getElementById('skeleton-canvas');
+            if (!skeletonCanvas) return;
+            skeletonCtx = skeletonCanvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            requestAnimationFrame(animateSkeletons);
+        }
+        
+        function resizeCanvas() {
+            if (!skeletonCanvas) return;
+            const container = skeletonCanvas.parentElement;
+            skeletonCanvas.width = container.clientWidth;
+            skeletonCanvas.height = container.clientHeight;
+        }
+        
+        function drawSkeleton(person, time) {
+            if (!skeletonCtx) return;
+            
+            const ctx = skeletonCtx;
+            const x = person.x * skeletonCanvas.width / 100;
+            const y = person.y * skeletonCanvas.height / 100;
+            const scale = 0.8;
+            
+            // Breathing animation
+            const breath = Math.sin(time * 0.003 + person.id) * 0.05 + 1;
+            
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Glow effect
+            ctx.shadowColor = '#ff6b6b';
+            ctx.shadowBlur = 10;
+            
+            // HEAD (circle)
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(x, y - 60 * scale * breath, 12 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // TORSO (line from head to hips)
+            ctx.beginPath();
+            ctx.moveTo(x, y - 60 * scale * breath);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            
+            // HIPS (small circle)
+            ctx.beginPath();
+            ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // LEFT LEG
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 15 * scale, y + 40 * scale); // thigh
+            ctx.lineTo(x - 20 * scale, y + 80 * scale); // shin
+            ctx.stroke();
+            
+            // LEFT FOOT
+            ctx.fillStyle = '#ff8888';
+            ctx.beginPath();
+            ctx.arc(x - 20 * scale, y + 80 * scale, 6 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // RIGHT LEG
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + 15 * scale, y + 40 * scale); // thigh
+            ctx.lineTo(x + 20 * scale, y + 80 * scale); // shin
+            ctx.stroke();
+            
+            // RIGHT FOOT
+            ctx.fillStyle = '#ff8888';
+            ctx.beginPath();
+            ctx.arc(x + 20 * scale, y + 80 * scale, 6 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // LEFT ARM
+            const armSwing = Math.sin(time * 0.002 + person.id * 2) * 10;
+            ctx.strokeStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.moveTo(x, y - 40 * scale * breath);
+            ctx.lineTo(x - 25 * scale, y - 20 * scale + armSwing); // upper arm
+            ctx.lineTo(x - 35 * scale, y + 10 * scale + armSwing); // forearm
+            ctx.stroke();
+            
+            // LEFT HAND
+            ctx.fillStyle = '#ff8888';
+            ctx.beginPath();
+            ctx.arc(x - 35 * scale, y + 10 * scale + armSwing, 5 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // RIGHT ARM
+            ctx.beginPath();
+            ctx.moveTo(x, y - 40 * scale * breath);
+            ctx.lineTo(x + 25 * scale, y - 20 * scale - armSwing); // upper arm
+            ctx.lineTo(x + 35 * scale, y + 10 * scale - armSwing); // forearm
+            ctx.stroke();
+            
+            // RIGHT HAND
+            ctx.beginPath();
+            ctx.arc(x + 35 * scale, y + 10 * scale - armSwing, 5 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+            
+            // Draw joint labels
+            ctx.fillStyle = '#00d4aa';
+            ctx.font = '10px monospace';
+            ctx.fillText('HEAD', x + 20, y - 60 * scale * breath);
+            ctx.fillText('L-ARM', x - 50, y - 20 * scale + armSwing);
+            ctx.fillText('R-ARM', x + 40, y - 20 * scale - armSwing);
+            ctx.fillText('L-LEG', x - 30, y + 40 * scale);
+            ctx.fillText('R-LEG', x + 25, y + 40 * scale);
+        }
+        
+        function animateSkeletons(time) {
+            if (!skeletonCtx || !skeletonCanvas) {
+                requestAnimationFrame(animateSkeletons);
+                return;
+            }
+            
+            // Clear canvas
+            skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+            
+            // Draw each detected person
+            detectedPeople.forEach(person => {
+                drawSkeleton(person, time);
+            });
+            
+            requestAnimationFrame(animateSkeletons);
+        }
+        
+        function updatePeoplePositions(count) {
+            // Update positions array based on count
+            const positions = [
+                { x: 50, y: 60 },
+                { x: 35, y: 55 },
+                { x: 65, y: 55 },
+                { x: 50, y: 45 }
+            ];
+            
+            detectedPeople = [];
+            for (let i = 0; i < count && i < 4; i++) {
+                detectedPeople.push({
+                    id: i,
+                    x: positions[i].x,
+                    y: positions[i].y
+                });
+            }
+        }
+        
+        // Auto-connect on load
+        window.onload = () => {
+            initCanvas();
+            setTimeout(connect, 1000);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuView Live CSI Data</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0a;
+            color: #00ff88;
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .header {
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        h1 { font-size: 24px; margin-bottom: 5px; }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status.connected { background: #00ff88; color: #000; }
+        .status.disconnected { background: #ff4444; color: #fff; }
+        .status.connecting { background: #ffaa00; color: #000; }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: #111;
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .metric-label { font-size: 12px; color: #888; margin-bottom: 5px; }
+        .metric-value { font-size: 28px; font-weight: bold; }
+        .metric-unit { font-size: 14px; color: #666; }
+        
+        .nodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .node-card {
+            background: #111;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            transition: border-color 0.3s;
+        }
+        .node-card.active { border-color: #00ff88; }
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .node-id { font-size: 20px; font-weight: bold; }
+        .node-rssi {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            background: #222;
+        }
+        .node-rssi.strong { background: #00ff88; color: #000; }
+        .node-rssi.medium { background: #ffaa00; color: #000; }
+        .node-rssi.weak { background: #ff4444; color: #fff; }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #222;
+        }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { color: #888; }
+        .data-value { color: #fff; }
+        
+        .raw-data {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+        .raw-data pre { margin: 0; white-space: pre-wrap; }
+        
+        .log {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            width: 350px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+        .log-entry { margin: 3px 0; }
+        .log-time { color: #666; }
+        .log-msg { color: #ccc; }
+        .log-error { color: #ff4444; }
+        .log-success { color: #00ff88; }
+        
+        button {
+            background: #00ff88;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button:hover { background: #00cc6a; }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>π RuView — Live CSI Monitor</h1>
+        <span id="connection-status" class="status disconnected">DISCONNECTED</span>
+        <button id="reconnect-btn" onclick="connectWebSocket()">Connect to Live Data</button>
+    </div>
+    
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-label">Active Nodes</div>
+            <div class="metric-value" id="active-nodes">0</div>
+            <div class="metric-unit">ESP32-S3</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Total Frames</div>
+            <div class="metric-value" id="total-frames">0</div>
+            <div class="metric-unit">CSI packets</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Data Rate</div>
+            <div class="metric-value" id="data-rate">0</div>
+            <div class="metric-unit">fps</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Last Update</div>
+            <div class="metric-value" id="last-update" style="font-size: 14px;">--</div>
+            <div class="metric-unit">timestamp</div>
+        </div>
+    </div>
+    
+    <div class="nodes-grid" id="nodes-container">
+        <div class="node-card" id="node-placeholder">
+            <div class="node-header">
+                <span class="node-id">Waiting for data...</span>
+            </div>
+            <p style="color: #666; text-align: center; padding: 40px 0;">
+                Connect to WebSocket to see live CSI data from ESP32 nodes
+            </p>
+        </div>
+    </div>
+    
+    <div class="raw-data">
+        <div style="color: #888; margin-bottom: 10px;">Last Raw Frame:</div>
+        <pre id="raw-json">No data received yet...</pre>
+    </div>
+    
+    <div class="log" id="log">
+        <div style="color: #888; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px;">Connection Log</div>
+        <div id="log-entries"></div>
+    </div>
+
+    <script>
+        const WS_URL = 'ws://localhost:3001/ws/sensing';
+        let ws = null;
+        let frameCount = 0;
+        let startTime = Date.now();
+        let nodes = new Map();
+        
+        function log(msg, type = 'info') {
+            const logContainer = document.getElementById('log-entries');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${msg}</span>`;
+            logContainer.insertBefore(entry, logContainer.firstChild);
+            if (logContainer.children.length > 20) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+        
+        function connectWebSocket() {
+            const btn = document.getElementById('reconnect-btn');
+            const status = document.getElementById('connection-status');
+            
+            btn.disabled = true;
+            status.textContent = 'CONNECTING...';
+            status.className = 'status connecting';
+            log('Connecting to WebSocket...', 'info');
+            
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                status.textContent = 'CONNECTED';
+                status.className = 'status connected';
+                btn.textContent = 'Connected';
+                log('WebSocket connected! Waiting for CSI data...', 'success');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleCsiData(data);
+                } catch (e) {
+                    log('Parse error: ' + e.message, 'error');
+                }
+            };
+            
+            ws.onerror = (error) => {
+                log('WebSocket error: ' + error.type, 'error');
+                status.textContent = 'ERROR';
+                status.className = 'status disconnected';
+                btn.disabled = false;
+                btn.textContent = 'Retry Connection';
+            };
+            
+            ws.onclose = () => {
+                log('WebSocket disconnected', 'error');
+                status.textContent = 'DISCONNECTED';
+                status.className = 'status disconnected';
+                btn.disabled = false;
+                btn.textContent = 'Connect to Live Data';
+            };
+        }
+        
+        function handleCsiData(data) {
+            frameCount++;
+            const now = Date.now();
+            const elapsed = (now - startTime) / 1000;
+            const fps = Math.round(frameCount / elapsed);
+            
+            // Update metrics
+            document.getElementById('total-frames').textContent = frameCount;
+            document.getElementById('data-rate').textContent = fps;
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+            
+            // Show raw data
+            document.getElementById('raw-json').textContent = JSON.stringify(data, null, 2);
+            
+            // Handle nodes data
+            if (data.nodes && Array.isArray(data.nodes)) {
+                document.getElementById('active-nodes').textContent = data.nodes.length;
+                updateNodesDisplay(data.nodes);
+            } else if (data.node_id) {
+                // Single node format
+                if (!nodes.has(data.node_id)) {
+                    nodes.set(data.node_id, data);
+                }
+                document.getElementById('active-nodes').textContent = nodes.size;
+                updateSingleNode(data);
+            }
+        }
+        
+        function updateNodesDisplay(nodeList) {
+            const container = document.getElementById('nodes-container');
+            container.innerHTML = '';
+            
+            nodeList.forEach(node => {
+                const card = createNodeCard(node);
+                container.appendChild(card);
+            });
+        }
+        
+        function updateSingleNode(data) {
+            const container = document.getElementById('nodes-container');
+            let card = document.getElementById(`node-${data.node_id}`);
+            
+            if (!card) {
+                card = createNodeCard(data);
+                card.id = `node-${data.node_id}`;
+                container.innerHTML = '';
+                container.appendChild(card);
+            }
+            
+            // Update values
+            updateNodeValues(card, data);
+        }
+        
+        function createNodeCard(node) {
+            const card = document.createElement('div');
+            card.className = 'node-card active';
+            card.id = `node-${node.node_id || node.id || 'unknown'}`;
+            
+            const rssi = node.rssi || node.signal_strength || -70;
+            const rssiClass = rssi > -50 ? 'strong' : rssi > -70 ? 'medium' : 'weak';
+            
+            card.innerHTML = `
+                <div class="node-header">
+                    <span class="node-id">Node ${node.node_id || node.id || '?'}</span>
+                    <span class="node-rssi ${rssiClass}">${rssi} dBm</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">MAC Address</span>
+                    <span class="data-value" id="mac-${node.node_id}">${node.mac_address || node.mac || 'N/A'}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Channel</span>
+                    <span class="data-value" id="ch-${node.node_id}">${node.channel || 'N/A'}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Timestamp</span>
+                    <span class="data-value" id="ts-${node.node_id}">${node.timestamp || new Date().toISOString()}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Subcarriers</span>
+                    <span class="data-value" id="sc-${node.node_id}">${(node.subcarrier_amplitudes || []).length}</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Phase Data</span>
+                    <span class="data-value" id="ph-${node.node_id}">${(node.subcarrier_phases || []).length}</span>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        function updateNodeValues(card, data) {
+            const nodeId = data.node_id || data.id;
+            if (!nodeId) return;
+            
+            const rssiEl = card.querySelector('.node-rssi');
+            if (rssiEl && data.rssi) {
+                rssiEl.textContent = `${data.rssi} dBm`;
+                rssiEl.className = `node-rssi ${data.rssi > -50 ? 'strong' : data.rssi > -70 ? 'medium' : 'weak'}`;
+            }
+            
+            const tsEl = document.getElementById(`ts-${nodeId}`);
+            if (tsEl && data.timestamp) tsEl.textContent = data.timestamp;
+            
+            const scEl = document.getElementById(`sc-${nodeId}`);
+            if (scEl && data.subcarrier_amplitudes) {
+                scEl.textContent = data.subcarrier_amplitudes.length;
+            }
+        }
+        
+        // Auto-connect on page load
+        window.onload = () => {
+            log('Page loaded. Click "Connect to Live Data" to start receiving CSI frames.', 'info');
+        };
+    </script>
+</body>
+</html>

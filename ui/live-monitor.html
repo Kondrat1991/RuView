@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RuView Live Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d1117;
+            color: #58a6ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 20px 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+        
+        .connection-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .connection-badge.connected {
+            background: #238636;
+            color: #fff;
+        }
+        
+        .connection-badge.disconnected {
+            background: #da3633;
+            color: #fff;
+        }
+        
+        .connection-badge.connecting {
+            background: #d29922;
+            color: #000;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .main {
+            flex: 1;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 30px;
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+        
+        .stat-card .label {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-card .value {
+            font-size: 48px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+        
+        .stat-card .unit {
+            font-size: 14px;
+            color: #6e7681;
+            margin-top: 4px;
+        }
+        
+        .controls {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .controls button {
+            width: 100%;
+            padding: 12px;
+            background: #238636;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .controls button:hover {
+            background: #2ea043;
+        }
+        
+        .controls button:disabled {
+            background: #30363d;
+            color: #8b949e;
+            cursor: not-allowed;
+        }
+        
+        .content {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        .content-header {
+            background: #21262d;
+            padding: 16px 24px;
+            border-bottom: 1px solid #30363d;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .content-header .update-time {
+            font-size: 12px;
+            color: #8b949e;
+            font-weight: 400;
+        }
+        
+        .nodes-container {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #8b949e;
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .node-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 20px;
+            align-items: center;
+            transition: border-color 0.3s, transform 0.2s;
+        }
+        
+        .node-card:hover {
+            border-color: #58a6ff;
+            transform: translateX(4px);
+        }
+        
+        .node-card.active {
+            border-color: #238636;
+            background: rgba(35, 134, 54, 0.1);
+        }
+        
+        .node-id {
+            width: 60px;
+            height: 60px;
+            background: #21262d;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 700;
+            color: #58a6ff;
+        }
+        
+        .node-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .node-info .mac {
+            font-size: 12px;
+            color: #8b949e;
+            font-family: monospace;
+        }
+        
+        .node-metrics {
+            display: flex;
+            gap: 24px;
+        }
+        
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .metric-label {
+            font-size: 11px;
+            color: #6e7681;
+            text-transform: uppercase;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #fff;
+        }
+        
+        .metric-value.rssi-good { color: #3fb950; }
+        .metric-value.rssi-ok { color: #d29922; }
+        .metric-value.rssi-bad { color: #f85149; }
+        
+        .node-status {
+            text-align: right;
+        }
+        
+        .status-pill {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-pill.online {
+            background: #238636;
+            color: #fff;
+        }
+        
+        .status-pill.offline {
+            background: #30363d;
+            color: #8b949e;
+        }
+        
+        .last-seen {
+            font-size: 11px;
+            color: #6e7681;
+            margin-top: 6px;
+        }
+        
+        .chart-container {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chart-legend {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+        
+        #activity-chart {
+            width: 100%;
+            height: 150px;
+            background: #161b22;
+            border-radius: 6px;
+        }
+        
+        .activity-indicator {
+            width: 100%;
+            height: 3px;
+            background: #21262d;
+            border-radius: 2px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        
+        .activity-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #58a6ff, #79c0ff);
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+        
+        @media (max-width: 900px) {
+            .main {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>π RuView Live Monitor</h1>
+        <span id="conn-status" class="connection-badge disconnected">
+            <span class="dot"></span>
+            <span id="conn-text">Disconnected</span>
+        </span>
+    </div>
+    
+    <div class="main">
+        <div class="sidebar">
+            <div class="stat-card">
+                <div class="label">Connected Plates</div>
+                <div class="value" id="node-count">0</div>
+                <div class="unit">ESP32-S3 nodes</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="label">Data Rate</div>
+                <div class="value" id="fps">0</div>
+                <div class="unit">frames/sec</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="label">Total Frames</div>
+                <div class="value" id="frame-count">0</div>
+                <div class="unit">CSI packets</div>
+            </div>
+            
+            <div class="controls">
+                <button id="connect-btn" onclick="toggleConnection()">Connect to Live Data</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="content-header">
+                <span>Live Node Data</span>
+                <span class="update-time" id="last-update">Last update: --</span>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">
+                    <span>Real-time Activity (frames/sec)</span>
+                    <div class="chart-legend">
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #238636;"></span>
+                            <span>Total FPS</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-dot" style="background: #58a6ff;"></span>
+                            <span>Active Nodes</span>
+                        </div>
+                    </div>
+                </div>
+                <canvas id="activity-chart"></canvas>
+            </div>
+            
+            <div class="nodes-container" id="nodes-list">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                    <p>No nodes connected</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Click "Connect to Live Data" to start monitoring</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = 'ws://localhost:3001/ws/sensing';
+        let ws = null;
+        let isConnected = false;
+        let frameCount = 0;
+        let startTime = Date.now();
+        let nodes = new Map();
+        
+        // Chart data history (60 seconds)
+        const chartHistory = [];
+        const maxHistory = 60;
+        let chartCanvas = null;
+        let chartCtx = null;
+        
+        function toggleConnection() {
+            if (isConnected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+        
+        function connect() {
+            const btn = document.getElementById('connect-btn');
+            const badge = document.getElementById('conn-status');
+            const text = document.getElementById('conn-text');
+            
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+            badge.className = 'connection-badge connecting';
+            text.textContent = 'Connecting';
+            
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                isConnected = true;
+                badge.className = 'connection-badge connected';
+                text.textContent = 'Connected';
+                btn.textContent = 'Disconnect';
+                btn.disabled = false;
+                startTime = Date.now();
+                frameCount = 0;
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket data:', data); // DEBUG
+                    processData(data);
+                } catch (e) {
+                    console.error('Parse error:', e);
+                }
+            };
+            
+            ws.onerror = () => {
+                badge.className = 'connection-badge disconnected';
+                text.textContent = 'Error';
+                btn.disabled = false;
+                btn.textContent = 'Retry Connection';
+            };
+            
+            ws.onclose = () => {
+                isConnected = false;
+                badge.className = 'connection-badge disconnected';
+                text.textContent = 'Disconnected';
+                btn.textContent = 'Connect to Live Data';
+                btn.disabled = false;
+            };
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+        
+        function processData(data) {
+            frameCount++;
+            const now = Date.now();
+            const elapsed = (now - startTime) / 1000;
+            const fps = Math.round(frameCount / elapsed);
+            
+            // Update stats
+            document.getElementById('frame-count').textContent = frameCount;
+            document.getElementById('fps').textContent = fps;
+            document.getElementById('last-update').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+            
+            // Process nodes - handle multiple data formats
+            let nodeList = [];
+            
+            if (data.nodes && Array.isArray(data.nodes)) {
+                // Server SensingUpdate format with nodes array
+                nodeList = data.nodes.map(n => ({
+                    node_id: n.node_id || n.id,
+                    rssi: n.rssi || n.last_rssi,
+                    mac_address: n.mac || n.mac_address,
+                    channel: n.channel,
+                    subcarrier_amplitudes: n.subcarriers || n.subcarrier_amplitudes || [],
+                    ...n
+                }));
+            } else if (data.node_id) {
+                // Single raw CSI frame format
+                nodeList = [data];
+            } else if (data.classification) {
+                // Server format with classification but no nodes array
+                // Try to extract from other fields or create placeholder
+                console.log('SensingUpdate format detected:', data.classification);
+            }
+            
+            // Also check for node_updates field (alternative server format)
+            if (data.node_updates && Array.isArray(data.node_updates)) {
+                nodeList = data.node_updates.map(n => ({
+                    node_id: n.node_id || n.id,
+                    rssi: n.rssi || -70,
+                    ...n
+                }));
+            }
+            
+            // Update node map
+            nodeList.forEach(node => {
+                const id = node.node_id || node.id;
+                if (id) {
+                    nodes.set(id, {
+                        ...node,
+                        lastSeen: now
+                    });
+                }
+            });
+            
+            // Update UI
+            document.getElementById('node-count').textContent = nodes.size;
+            renderNodes();
+        }
+        
+        function renderNodes() {
+            const container = document.getElementById('nodes-list');
+            
+            if (nodes.size === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                        <p>Waiting for nodes...</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            nodes.forEach((node, id) => {
+                const card = createNodeCard(node, id);
+                container.appendChild(card);
+            });
+        }
+        
+        function createNodeCard(node, id) {
+            const now = Date.now();
+            const lastSeen = node.lastSeen || now;
+            const age = (now - lastSeen) / 1000;
+            const isActive = age < 5;
+            
+            const rssi = node.rssi || node.signal_strength || -70;
+            const rssiClass = rssi > -50 ? 'rssi-good' : rssi > -70 ? 'rssi-ok' : 'rssi-bad';
+            
+            const div = document.createElement('div');
+            div.className = 'node-card ' + (isActive ? 'active' : '');
+            div.innerHTML = `
+                <div class="node-id">${id}</div>
+                <div class="node-info">
+                    <div class="mac">${node.mac_address || node.mac || 'MAC: --'}</div>
+                    <div class="node-metrics">
+                        <div class="metric">
+                            <span class="metric-label">RSSI</span>
+                            <span class="metric-value ${rssiClass}">${rssi} dBm</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Channel</span>
+                            <span class="metric-value">${node.channel || '--'}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Subcarriers</span>
+                            <span class="metric-value">${(node.subcarrier_amplitudes || []).length}</span>
+                        </div>
+                    </div>
+                    <div class="activity-indicator">
+                        <div class="activity-bar" style="width: ${Math.min(100, (node.rssi + 100) / 50 * 100)}%"></div>
+                    </div>
+                </div>
+                <div class="node-status">
+                    <span class="status-pill ${isActive ? 'online' : 'offline'}">${isActive ? 'ONLINE' : 'OFFLINE'}</span>
+                    <div class="last-seen">${isActive ? 'Live' : Math.round(age) + 's ago'}</div>
+                </div>
+            `;
+            return div;
+        }
+        
+        // Chart rendering
+        function initChart() {
+            chartCanvas = document.getElementById('activity-chart');
+            if (!chartCanvas) return;
+            chartCtx = chartCanvas.getContext('2d');
+            resizeChart();
+            window.addEventListener('resize', resizeChart);
+        }
+        
+        function resizeChart() {
+            if (!chartCanvas) return;
+            const rect = chartCanvas.getBoundingClientRect();
+            chartCanvas.width = rect.width;
+            chartCanvas.height = rect.height;
+        }
+        
+        function drawChart() {
+            if (!chartCtx || chartHistory.length < 2) return;
+            
+            const w = chartCanvas.width;
+            const h = chartCanvas.height;
+            const padding = 30;
+            
+            // Clear
+            chartCtx.fillStyle = '#161b22';
+            chartCtx.fillRect(0, 0, w, h);
+            
+            // Find max values
+            const maxFps = Math.max(10, ...chartHistory.map(d => d.fps));
+            const maxNodes = Math.max(1, ...chartHistory.map(d => d.nodes));
+            
+            // Draw grid lines
+            chartCtx.strokeStyle = '#21262d';
+            chartCtx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + (h - 2 * padding) * (i / 4);
+                chartCtx.beginPath();
+                chartCtx.moveTo(padding, y);
+                chartCtx.lineTo(w - padding, y);
+                chartCtx.stroke();
+            }
+            
+            // Draw FPS line (green)
+            drawLine(chartHistory, 'fps', maxFps, '#238636', padding, w, h);
+            
+            // Draw nodes line (blue) - scaled differently
+            drawLine(chartHistory, 'nodes', maxNodes * 5, '#58a6ff', padding, w, h);
+            
+            // Draw labels
+            chartCtx.fillStyle = '#8b949e';
+            chartCtx.font = '10px sans-serif';
+            chartCtx.textAlign = 'right';
+            chartCtx.fillText(maxFps + ' fps', padding - 5, padding + 5);
+            chartCtx.fillText('0', padding - 5, h - padding + 5);
+        }
+        
+        function drawLine(data, key, maxValue, color, padding, w, h) {
+            if (data.length < 2) return;
+            
+            chartCtx.strokeStyle = color;
+            chartCtx.lineWidth = 2;
+            chartCtx.beginPath();
+            
+            data.forEach((point, i) => {
+                const x = padding + (w - 2 * padding) * (i / (maxHistory - 1));
+                const value = point[key] || 0;
+                const y = padding + (h - 2 * padding) * (1 - value / maxValue);
+                
+                if (i === 0) {
+                    chartCtx.moveTo(x, y);
+                } else {
+                    chartCtx.lineTo(x, y);
+                }
+            });
+            
+            chartCtx.stroke();
+            
+            // Fill area under line
+            chartCtx.fillStyle = color + '20'; // Add transparency
+            chartCtx.lineTo(padding + (w - 2 * padding) * ((data.length - 1) / (maxHistory - 1)), h - padding);
+            chartCtx.lineTo(padding, h - padding);
+            chartCtx.closePath();
+            chartCtx.fill();
+        }
+        
+        function updateChartData(fps, nodeCount) {
+            chartHistory.push({
+                fps: fps,
+                nodes: nodeCount,
+                time: Date.now()
+            });
+            
+            if (chartHistory.length > maxHistory) {
+                chartHistory.shift();
+            }
+            
+            drawChart();
+        }
+        
+        // Cleanup old nodes every 10 seconds
+        setInterval(() => {
+            const now = Date.now();
+            let changed = false;
+            nodes.forEach((node, id) => {
+                if ((now - node.lastSeen) > 30000) { // Remove after 30s
+                    nodes.delete(id);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                document.getElementById('node-count').textContent = nodes.size;
+                renderNodes();
+            }
+        }, 10000);
+        
+        // Update chart every second
+        setInterval(() => {
+            if (isConnected) {
+                const elapsed = (Date.now() - startTime) / 1000;
+                const fps = Math.round(frameCount / elapsed);
+                updateChartData(fps, nodes.size);
+            }
+        }, 1000);
+        
+        // Auto-connect on load
+        window.onload = () => {
+            initChart();
+            setTimeout(connect, 500);
+        };
+    </script>
+</body>
+</html>
