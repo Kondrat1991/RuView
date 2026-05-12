@@ -328,7 +328,19 @@ export class SensingTab {
   _updateNodePanels(data) {
     const container = this.container.querySelector('#nodeStatusContainer');
     if (!container) return;
-    const nodeFeatures = data.node_features || [];
+
+    // Prefer node_features (rich per-node data), fall back to data.nodes (always present)
+    let nodeFeatures = data.node_features || [];
+    if (nodeFeatures.length === 0 && data.nodes && data.nodes.length > 0) {
+      nodeFeatures = data.nodes.map(n => ({
+        node_id: n.node_id || n.id,
+        rssi_dbm: n.rssi_dbm || 0,
+        stale: false,
+        features: { variance: 0 },
+        classification: { motion_level: data.classification?.motion_level || 'unknown', confidence: data.classification?.confidence || 0 },
+      }));
+    }
+
     if (nodeFeatures.length === 0) {
       container.textContent = '';
       const msg = document.createElement('div');

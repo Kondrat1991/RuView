@@ -575,8 +575,8 @@
                 if (isNaN(entropy)) entropy = 0;
                 
                 // Real data: entropy varies (high entropyVariance), Simulation: entropy consistent (low entropyVariance)
-                const hasVaryingEntropy = entropyVariance > 0.3; // Lowered threshold
-                const hasReasonableEntropy = entropy > 0.5; // Lowered threshold
+                const hasVaryingEntropy = entropyVariance > 0.15; // Node 2 seen at 0.267 std-dev
+                const hasReasonableEntropy = entropy > 0.5;
                 
                 const isReal = serverSource === 'esp32' && hasCSI && validId && hasVaryingEntropy && hasReasonableEntropy;
                 

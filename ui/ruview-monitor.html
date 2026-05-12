@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RuView — WiFi CSI Monitor</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --border: #1f2937;
+    --text: #f1f5f9;
+    --muted: #6b7280;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+    --cyan: #06b6d4;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  header h1 span { color: var(--cyan); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ws-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .ws-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+  }
+  .ws-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .ws-dot.error { background: var(--red); }
+
+  /* ── Grid layout ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* ── Presence card ── */
+  .presence-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .presence-orb {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .presence-orb.absent {
+    background: rgba(107,114,128,0.15);
+    box-shadow: none;
+  }
+  .presence-orb.present {
+    background: rgba(16,185,129,0.15);
+    box-shadow: 0 0 20px rgba(16,185,129,0.3);
+  }
+  .presence-orb.active {
+    background: rgba(239,68,68,0.15);
+    box-shadow: 0 0 20px rgba(239,68,68,0.35);
+  }
+
+  .presence-info h2 {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 4px;
+    transition: color 0.3s;
+  }
+  .presence-info .conf {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── Motion card ── */
+  .motion-level {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    margin-bottom: 12px;
+    height: 48px;
+  }
+
+  .motion-bar {
+    flex: 1;
+    border-radius: 3px;
+    transition: height 0.3s ease, background 0.3s;
+    min-height: 4px;
+  }
+
+  .motion-score-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .motion-score-val {
+    font-size: 28px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .motion-label {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+  }
+  .label-absent { background: rgba(107,114,128,0.2); color: var(--muted); }
+  .label-still  { background: rgba(59,130,246,0.2);  color: var(--blue); }
+  .label-moving { background: rgba(245,158,11,0.2);  color: var(--yellow); }
+  .label-active { background: rgba(239,68,68,0.2);   color: var(--red); }
+
+  /* ── Breathing card ── */
+  .breath-value {
+    font-size: 48px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .breath-unit {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  .breath-bar-track {
+    background: var(--border);
+    border-radius: 4px;
+    height: 6px;
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+
+  .breath-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--cyan);
+    transition: width 0.6s ease;
+  }
+
+  .breath-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .breath-wave {
+    margin-top: 12px;
+    height: 40px;
+  }
+
+  /* ── Nodes card ── */
+  .node-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .node-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    padding: 8px 12px;
+    border-left: 3px solid var(--border);
+    transition: border-color 0.3s;
+  }
+  .node-row.live { border-left-color: var(--green); }
+
+  .node-id {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .node-info { flex: 1; }
+  .node-name { font-size: 12px; font-weight: 600; }
+  .node-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .node-entropy-bar {
+    width: 60px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .node-entropy-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--green);
+    transition: width 0.4s;
+  }
+
+  /* ── Spikes card ── */
+  .spike-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .spike-feed::-webkit-scrollbar { width: 4px; }
+  .spike-feed::-webkit-scrollbar-track { background: var(--border); }
+  .spike-feed::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+  .spike-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 6px;
+    font-size: 11px;
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .spike-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .spike-time { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 48px; }
+  .spike-node { font-weight: 600; min-width: 48px; }
+  .spike-delta { margin-left: auto; color: var(--yellow); font-weight: 700; }
+
+  /* ── Offline state ── */
+  .offline-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,14,26,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    font-size: 13px;
+    color: var(--muted);
+    backdrop-filter: blur(2px);
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .offline-overlay.hidden { opacity: 0; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .stat-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stat-pill strong { font-variant-numeric: tabular-nums; }
+
+  canvas { display: block; }
+
+  /* ── Presence viz ── */
+  .viz-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    grid-column: span 2;
+  }
+
+  .viz-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .calib-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.35);
+    color: var(--yellow);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+    letter-spacing: 0.03em;
+  }
+  .calib-btn:hover { background: rgba(245,158,11,0.22); }
+  .calib-btn.running {
+    background: rgba(239,68,68,0.12);
+    border-color: rgba(239,68,68,0.35);
+    color: var(--red);
+  }
+
+  .calib-status {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    min-height: 16px;
+  }
+
+  #vizCanvas { border-radius: 10px; }
+
+  .viz-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .viz-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Ru<span>View</span> — WiFi CSI Monitor</h1>
+  <div class="header-right">
+    <div class="ws-badge">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsStatus">Connecting…</span>
+    </div>
+  </div>
+</header>
+
+<!-- Stats row -->
+<div class="stats-row">
+  <div class="stat-pill">📡 Nodes online: <strong id="statNodes">0</strong></div>
+  <div class="stat-pill">📦 Frames: <strong id="statFrames">0</strong></div>
+  <div class="stat-pill">⚡ Rate: <strong id="statRate">0</strong> fps</div>
+  <div class="stat-pill">⚠️ Spikes: <strong id="statSpikes">0</strong></div>
+</div>
+
+<!-- Presence Visualization -->
+<div class="viz-card" style="margin-bottom:16px">
+  <div class="viz-header">
+    <div>
+      <div class="card-title" style="margin-bottom:2px">Presence Visualization</div>
+      <div class="calib-status" id="calibStatus">Not calibrated — click Calibrate with empty room</div>
+    </div>
+    <button class="calib-btn" id="calibBtn" onclick="startCalibration()">⊙ Calibrate Empty Room</button>
+  </div>
+  <canvas id="vizCanvas" width="900" height="220"></canvas>
+  <div class="viz-legend">
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#1f2937"></div>Baseline (empty)</div>
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#06b6d4"></div>Low activity</div>
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#10b981"></div>Present / still</div>
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#f59e0b"></div>Moving</div>
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#ef4444"></div>Active movement</div>
+    <div class="viz-legend-item"><div class="legend-dot" style="background:#8b5cf6"></div>Node markers</div>
+  </div>
+</div>
+
+<!-- Main grid -->
+<div class="grid">
+
+  <!-- 1. Presence -->
+  <div class="card" id="cardPresence">
+    <div class="card-title">Presence Detection</div>
+    <div class="presence-row">
+      <div class="presence-orb absent" id="presenceOrb">🚶</div>
+      <div class="presence-info">
+        <h2 id="presenceLabel" style="color: var(--muted)">ABSENT</h2>
+        <div class="conf">Confidence: <span id="presenceConf">—</span></div>
+      </div>
+    </div>
+    <div class="offline-overlay" id="ovPresence">No signal</div>
+  </div>
+
+  <!-- 2. Motion Intensity -->
+  <div class="card" id="cardMotion">
+    <div class="card-title">Motion Intensity</div>
+    <div class="motion-score-row">
+      <div class="motion-score-val" id="motionScore">0<span style="font-size:16px;font-weight:400;color:var(--muted)">%</span></div>
+      <div class="motion-label label-absent" id="motionLabel">ABSENT</div>
+    </div>
+    <div class="motion-level" id="motionBars"></div>
+    <div class="offline-overlay" id="ovMotion">No signal</div>
+  </div>
+
+  <!-- 3. Breathing Rate -->
+  <div class="card" id="cardBreath">
+    <div class="card-title">Breathing Rate</div>
+    <div class="breath-value" id="breathVal">—</div>
+    <div class="breath-unit">breaths / min</div>
+    <div class="breath-bar-track">
+      <div class="breath-bar-fill" id="breathBar" style="width:0%"></div>
+    </div>
+    <div class="breath-range"><span>6 (slow)</span><span>Normal: 12–20</span><span>30 (fast)</span></div>
+    <canvas class="breath-wave" id="breathCanvas" width="320" height="40"></canvas>
+    <div class="offline-overlay" id="ovBreath">No signal</div>
+  </div>
+
+  <!-- 4. Active Nodes -->
+  <div class="card" id="cardNodes">
+    <div class="card-title">Node Status</div>
+    <div class="node-list" id="nodeList">
+      <div style="color:var(--muted);font-size:12px">Waiting for nodes…</div>
+    </div>
+    <div class="offline-overlay" id="ovNodes">No signal</div>
+  </div>
+
+  <!-- 5. Movement Spikes -->
+  <div class="card" style="grid-column: span 2;" id="cardSpikes">
+    <div class="card-title">Movement Events (Gross Motion Spikes)</div>
+    <div class="spike-feed" id="spikeFeed">
+      <div style="color:var(--muted);font-size:12px">Listening for movement events…</div>
+    </div>
+    <div class="offline-overlay" id="ovSpikes">No signal</div>
+  </div>
+
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const WS_URL = `ws://${location.hostname}:3001/ws/sensing`;
+
+// ── Calibration state ────────────────────────────────────────────────────────
+let calibrated = false;
+let calibrating = false;
+let calibCountdown = 0;
+let calibTimer = null;
+let calibSamples = [];        // variance samples during calibration
+let baseline = { mean: 0, std: 1, max: 1 };  // empty-room baseline
+const CALIB_DURATION = 10;   // seconds
+
+// ── Visualization state ───────────────────────────────────────────────────────
+let vizCanvas, vizCtx;
+const HISTORY_LEN = 120;     // ~10s at 12fps
+let varHistory = [];          // [{t, variance, motionBand, nodeCount}]
+const BALL_SMOOTH = 0.12;    // EMA for ball position/size
+let ball = { x: 0.5, y: 0.5, r: 0, glow: 0, level: 0 };
+const NODE_COLORS = ['#06b6d4','#f59e0b','#10b981','#8b5cf6','#ef4444','#3b82f6'];
+const SPIKE_THRESHOLD_MULTIPLIER = 2.2; // inter-frame delta > mean + N*std = spike
+const MAX_SPIKES = 60;
+const ENTROPY_THRESHOLD = 0.15; // entropyVariance > this = real node
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let ws = null;
+let frames = 0, startTime = Date.now(), spikeCount = 0;
+const nodeState = new Map();   // node_id -> {amplitudeHistory, deltaHistory, lastSeen, ...}
+const spikes = [];
+const breathHistory = [];      // recent BPM readings for wave
+let lastClassification = null;
+let connected = false;
+let csiHistory = new Map();    // node_id -> [entropy values] for real-detection
+
+// ── Motion bars setup ─────────────────────────────────────────────────────────
+const BAR_COUNT = 20;
+const barsEl = document.getElementById('motionBars');
+const bars = [];
+for (let i = 0; i < BAR_COUNT; i++) {
+  const b = document.createElement('div');
+  b.className = 'motion-bar';
+  b.style.height = '4px';
+  b.style.background = '#1f2937';
+  barsEl.appendChild(b);
+  bars.push(b);
+}
+
+// ── Calibration ─────────────────────────────────────────────────────────────
+function startCalibration() {
+  if (calibrating) { stopCalibration(false); return; }
+  calibrating = true;
+  calibSamples = [];
+  calibCountdown = CALIB_DURATION;
+  document.getElementById('calibBtn').textContent = '✕ Cancel';
+  document.getElementById('calibBtn').classList.add('running');
+  document.getElementById('calibStatus').textContent =
+    `Calibrating… keep room EMPTY  (${calibCountdown}s remaining)`;
+
+  calibTimer = setInterval(() => {
+    calibCountdown--;
+    document.getElementById('calibStatus').textContent =
+      `Calibrating… keep room EMPTY  (${calibCountdown}s remaining)`;
+    if (calibCountdown <= 0) stopCalibration(true);
+  }, 1000);
+}
+
+function stopCalibration(save) {
+  clearInterval(calibTimer);
+  calibrating = false;
+  document.getElementById('calibBtn').textContent = '⊙ Calibrate Empty Room';
+  document.getElementById('calibBtn').classList.remove('running');
+
+  if (save && calibSamples.length >= 5) {
+    const mean = calibSamples.reduce((a,b)=>a+b,0) / calibSamples.length;
+    const std = Math.sqrt(calibSamples.reduce((s,v)=>s+(v-mean)**2,0)/calibSamples.length);
+    const max = Math.max(...calibSamples);
+    baseline = { mean, std: Math.max(std, 0.1), max: Math.max(max, mean + 0.5) };
+    calibrated = true;
+    document.getElementById('calibStatus').textContent =
+      `✅ Calibrated — baseline variance: ${mean.toFixed(2)} ±${std.toFixed(2)}  (${calibSamples.length} samples)`;
+  } else {
+    document.getElementById('calibStatus').textContent =
+      calibrated ? '✅ Previous calibration kept' : '⚠️ Calibration cancelled — not enough data';
+  }
+}
+
+function presenceLevel(variance) {
+  if (!calibrated) {
+    // uncalibrated: use raw thresholds
+    if (variance < 1)   return 0;
+    if (variance < 3)   return 1;
+    if (variance < 7)   return 2;
+    if (variance < 14)  return 3;
+    return 4;
+  }
+  // calibrated: sigma above baseline
+  const sigma = (variance - baseline.mean) / baseline.std;
+  if (sigma < 1.0)  return 0;   // empty
+  if (sigma < 2.5)  return 1;   // low / noise
+  if (sigma < 5.0)  return 2;   // present still
+  if (sigma < 9.0)  return 3;   // moving
+  return 4;                      // active
+}
+
+// ── Visualization ─────────────────────────────────────────────────────────────
+function initViz() {
+  vizCanvas = document.getElementById('vizCanvas');
+  vizCtx = vizCanvas.getContext('2d');
+  resizeViz();
+  window.addEventListener('resize', resizeViz);
+  requestAnimationFrame(drawViz);
+}
+
+function resizeViz() {
+  const w = vizCanvas.parentElement.clientWidth - 40;
+  vizCanvas.width = Math.max(w, 300);
+  vizCanvas.height = 220;
+}
+
+function drawViz() {
+  requestAnimationFrame(drawViz);
+  if (!vizCtx) return;
+  const W = vizCanvas.width, H = vizCanvas.height;
+  vizCtx.clearRect(0, 0, W, H);
+
+  // Background
+  vizCtx.fillStyle = '#0d1422';
+  vizCtx.beginPath();
+  vizCtx.roundRect(0, 0, W, H, 10);
+  vizCtx.fill();
+
+  // ── History timeline (left ~60% of canvas) ──────────────────────────────────
+  const timeW = Math.floor(W * 0.60);
+  const timeH = H - 40;
+  const padL = 14, padT = 20;
+
+  // Grid lines
+  vizCtx.strokeStyle = '#1a2235';
+  vizCtx.lineWidth = 1;
+  [0.25, 0.5, 0.75, 1.0].forEach(f => {
+    const y = padT + timeH - f * timeH;
+    vizCtx.beginPath();
+    vizCtx.moveTo(padL, y);
+    vizCtx.lineTo(padL + timeW, y);
+    vizCtx.stroke();
+  });
+
+  // Baseline band
+  if (calibrated) {
+    const maxV = Math.max(baseline.max * 2.5, 20);
+    const bY  = padT + timeH - (baseline.mean / maxV) * timeH;
+    const bH  = ((baseline.std * 2) / maxV) * timeH;
+    vizCtx.fillStyle = 'rgba(59,130,246,0.07)';
+    vizCtx.fillRect(padL, bY - bH/2, timeW, bH);
+    // baseline line
+    vizCtx.strokeStyle = 'rgba(59,130,246,0.3)';
+    vizCtx.setLineDash([4,4]);
+    vizCtx.beginPath();
+    vizCtx.moveTo(padL, bY);
+    vizCtx.lineTo(padL + timeW, bY);
+    vizCtx.stroke();
+    vizCtx.setLineDash([]);
+  }
+
+  // History line
+  if (varHistory.length > 1) {
+    const maxV = calibrated
+      ? Math.max(baseline.max * 2.5, varHistory.reduce((m,h)=>Math.max(m,h.variance),0) * 1.1, 20)
+      : Math.max(varHistory.reduce((m,h)=>Math.max(m,h.variance),0) * 1.1, 10);
+
+    // Fill gradient under curve
+    const grad = vizCtx.createLinearGradient(0, padT, 0, padT + timeH);
+    grad.addColorStop(0, 'rgba(6,182,212,0.25)');
+    grad.addColorStop(1, 'rgba(6,182,212,0.01)');
+    vizCtx.fillStyle = grad;
+    vizCtx.beginPath();
+    varHistory.forEach((h, i) => {
+      const x = padL + (i / (HISTORY_LEN - 1)) * timeW;
+      const y = padT + timeH - (h.variance / maxV) * timeH;
+      i === 0 ? vizCtx.moveTo(x, padT + timeH) : null;
+      vizCtx.lineTo(x, y);
+    });
+    vizCtx.lineTo(padL + ((varHistory.length-1) / (HISTORY_LEN-1)) * timeW, padT + timeH);
+    vizCtx.closePath();
+    vizCtx.fill();
+
+    // Line
+    vizCtx.strokeStyle = '#06b6d4';
+    vizCtx.lineWidth = 1.8;
+    vizCtx.lineJoin = 'round';
+    vizCtx.beginPath();
+    varHistory.forEach((h, i) => {
+      const x = padL + (i / (HISTORY_LEN - 1)) * timeW;
+      const y = padT + timeH - (h.variance / maxV) * timeH;
+      i === 0 ? vizCtx.moveTo(x, y) : vizCtx.lineTo(x, y);
+    });
+    vizCtx.stroke();
+
+    // Spike markers
+    spikes.slice(0, 20).forEach(s => {
+      const age = parseFloat(s.elapsed);
+      const totalSecs = (Date.now() - startTime) / 1000;
+      const idx = Math.floor(((age / totalSecs)) * varHistory.length);
+      if (idx >= 0 && idx < varHistory.length) {
+        const x = padL + (idx / (HISTORY_LEN - 1)) * timeW;
+        vizCtx.fillStyle = 'rgba(239,68,68,0.8)';
+        vizCtx.beginPath();
+        vizCtx.arc(x, padT + 8, 3, 0, Math.PI * 2);
+        vizCtx.fill();
+      }
+    });
+
+    // Y-axis labels
+    vizCtx.fillStyle = '#4b5563';
+    vizCtx.font = '9px monospace';
+    vizCtx.textAlign = 'right';
+    ['max', '75%', '50%', '25%'].forEach((l, i) => {
+      vizCtx.fillText(l, padL - 3, padT + (i * timeH / 3) + 4);
+    });
+    vizCtx.textAlign = 'left';
+    vizCtx.fillStyle = '#374151';
+    vizCtx.fillText('CSI variance', padL + 2, padT + 10);
+  } else {
+    vizCtx.fillStyle = '#374151';
+    vizCtx.font = '12px system-ui';
+    vizCtx.textAlign = 'center';
+    vizCtx.fillText(connected ? 'Waiting for data…' : 'Disconnected', padL + timeW/2, H/2);
+    vizCtx.textAlign = 'left';
+  }
+
+  // Divider
+  vizCtx.strokeStyle = '#1f2937';
+  vizCtx.lineWidth = 1;
+  vizCtx.beginPath();
+  vizCtx.moveTo(padL + timeW + 12, 10);
+  vizCtx.lineTo(padL + timeW + 12, H - 10);
+  vizCtx.stroke();
+
+  // ── Ball (right ~40%) ───────────────────────────────────────────────────────
+  const ballAreaX = padL + timeW + 24;
+  const ballAreaW = W - ballAreaX - 10;
+  const ballAreaH = H;
+  const cx = ballAreaX + ballAreaW / 2;
+  const cy = ballAreaH / 2;
+
+  // Room outline
+  vizCtx.strokeStyle = '#1f2937';
+  vizCtx.lineWidth = 1;
+  vizCtx.strokeRect(ballAreaX, 10, ballAreaW, H - 20);
+
+  // Node markers
+  const activeNodes = [...nodeState.keys()].filter(id => {
+    const ns = nodeState.get(id);
+    return Date.now() - ns.lastSeen < 5000;
+  });
+  const nodePositions = [
+    [ballAreaX + 8, 18], [ballAreaX + ballAreaW - 8, 18],
+    [cx, H - 18], [ballAreaX + 8, H - 18],
+    [ballAreaX + ballAreaW - 8, H - 18]
+  ];
+  activeNodes.forEach((id, i) => {
+    const color = NODE_COLORS[id % NODE_COLORS.length];
+    const [nx, ny] = nodePositions[i % nodePositions.length];
+    vizCtx.fillStyle = color;
+    vizCtx.beginPath();
+    vizCtx.arc(nx, ny, 4, 0, Math.PI * 2);
+    vizCtx.fill();
+    vizCtx.fillStyle = color + '33';
+    vizCtx.beginPath();
+    vizCtx.arc(nx, ny, 10, 0, Math.PI * 2);
+    vizCtx.fill();
+    vizCtx.fillStyle = '#6b7280';
+    vizCtx.font = '8px monospace';
+    vizCtx.textAlign = 'center';
+    vizCtx.fillText('N' + id, nx, ny + 18);
+    vizCtx.textAlign = 'left';
+  });
+
+  // Presence ball
+  const level = ball.level;
+  const LEVEL_COLORS = ['#1f2937','#06b6d4','#10b981','#f59e0b','#ef4444'];
+  const LEVEL_LABELS = ['EMPTY','LOW','PRESENT','MOVING','ACTIVE'];
+  const ballColor = LEVEL_COLORS[Math.round(level)];
+
+  if (ball.r > 2) {
+    // Outer glow
+    const glowR = ball.r * (1.8 + ball.glow * 0.8);
+    const grd = vizCtx.createRadialGradient(cx, cy, ball.r * 0.3, cx, cy, glowR);
+    grd.addColorStop(0, ballColor + 'aa');
+    grd.addColorStop(1, ballColor + '00');
+    vizCtx.fillStyle = grd;
+    vizCtx.beginPath();
+    vizCtx.arc(cx, cy, glowR, 0, Math.PI * 2);
+    vizCtx.fill();
+
+    // Core ball
+    const coreGrd = vizCtx.createRadialGradient(cx - ball.r*0.3, cy - ball.r*0.3, ball.r*0.05, cx, cy, ball.r);
+    coreGrd.addColorStop(0, '#ffffff33');
+    coreGrd.addColorStop(0.4, ballColor);
+    coreGrd.addColorStop(1, ballColor + 'cc');
+    vizCtx.fillStyle = coreGrd;
+    vizCtx.beginPath();
+    vizCtx.arc(cx, cy, ball.r, 0, Math.PI * 2);
+    vizCtx.fill();
+  } else {
+    // Empty room dot
+    vizCtx.fillStyle = '#2d3748';
+    vizCtx.beginPath();
+    vizCtx.arc(cx, cy, 6, 0, Math.PI * 2);
+    vizCtx.fill();
+  }
+
+  // Label
+  const lIdx = Math.round(level);
+  vizCtx.fillStyle = LEVEL_COLORS[lIdx];
+  vizCtx.font = 'bold 11px system-ui';
+  vizCtx.textAlign = 'center';
+  vizCtx.fillText(LEVEL_LABELS[lIdx], cx, H - 14);
+  vizCtx.textAlign = 'left';
+
+  // Calibration overlay
+  if (calibrating) {
+    vizCtx.fillStyle = 'rgba(245,158,11,0.06)';
+    vizCtx.beginPath();
+    vizCtx.roundRect(0, 0, W, H, 10);
+    vizCtx.fill();
+    vizCtx.fillStyle = 'rgba(245,158,11,0.9)';
+    vizCtx.font = 'bold 13px system-ui';
+    vizCtx.textAlign = 'center';
+    vizCtx.fillText(`⊙ CALIBRATING EMPTY ROOM — ${calibCountdown}s`, W/2, H/2);
+    vizCtx.textAlign = 'left';
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  setStatus('Connecting…', '');
+  try { ws = new WebSocket(WS_URL); } catch(e) { scheduleReconnect(); return; }
+
+  ws.onopen = () => {
+    connected = true;
+    setStatus('Live', 'live');
+    hideOverlays();
+  };
+
+  ws.onmessage = (e) => {
+    try { processFrame(JSON.parse(e.data)); }
+    catch(_) {}
+  };
+
+  ws.onclose = ws.onerror = () => {
+    connected = false;
+    setStatus('Disconnected', 'error');
+    showOverlays();
+    scheduleReconnect();
+  };
+}
+
+function scheduleReconnect() {
+  setTimeout(connect, 3000);
+}
+
+function setStatus(text, cls) {
+  document.getElementById('wsStatus').textContent = text;
+  const dot = document.getElementById('wsDot');
+  dot.className = 'ws-dot' + (cls ? ' ' + cls : '');
+}
+
+function showOverlays() {
+  ['ovPresence','ovMotion','ovBreath','ovNodes','ovSpikes'].forEach(id => {
+    document.getElementById(id).classList.remove('hidden');
+  });
+}
+
+function hideOverlays() {
+  ['ovPresence','ovMotion','ovBreath','ovNodes','ovSpikes'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+// ── Frame processing ──────────────────────────────────────────────────────────
+function processFrame(data) {
+  const type = data.type || data.msg_type;
+  if (type !== 'sensing_update') return;
+
+  const source = data.source || '';
+  if (source !== 'esp32') return;
+
+  const nodes = data.nodes || [];
+  const realNodes = nodes.filter(n => isRealNode(n));
+  if (realNodes.length === 0) return;
+
+  frames++;
+  const now = Date.now();
+
+  // Stats
+  const elapsed = (now - startTime) / 1000;
+  document.getElementById('statFrames').textContent = frames;
+  document.getElementById('statRate').textContent = Math.round(frames / Math.max(elapsed, 1));
+
+  // ── 1. Presence ──────────────────────────────────────────────────────────────
+  const cl = data.classification || {};
+  const motionLevel = cl.motion_level || 'absent';
+  const confidence = cl.confidence || 0;
+  lastClassification = cl;
+  updatePresence(motionLevel, confidence);
+
+  // ── 2. Motion intensity ───────────────────────────────────────────────────────
+  const features = data.features || {};
+  const variance = features.variance || 0;
+  const motionBand = features.motion_band_power || 0;
+  const motionScore = Math.round(Math.min(100, (variance / 15) * 100));
+  updateMotion(motionScore, motionLevel, variance);
+
+  // Feed calibration samples
+  if (calibrating) calibSamples.push(variance);
+
+  // Update history for visualization
+  varHistory.push({ t: now, variance, motionBand, nodeCount: realNodes.length });
+  if (varHistory.length > HISTORY_LEN) varHistory.shift();
+
+  // Update ball (EMA)
+  const targetLevel = presenceLevel(variance);
+  ball.level += (targetLevel - ball.level) * 0.15;
+  const targetR = targetLevel === 0 ? 0 : 18 + targetLevel * 16;
+  ball.r += (targetR - ball.r) * BALL_SMOOTH;
+  ball.glow = (variance / Math.max(baseline.max, 15)) * 0.5;
+
+  // ── 3. Breathing rate ─────────────────────────────────────────────────────────
+  const vs = data.vital_signs || {};
+  const bpm = vs.breathing_rate_bpm || null;
+  updateBreathing(bpm, vs.breathing_confidence || 0);
+
+  // ── 4. Per-node state + spike detection ───────────────────────────────────────
+  realNodes.forEach(n => {
+    const id = n.node_id || n.id;
+    const amp = n.amplitude || [];
+    if (!amp.length) return;
+
+    if (!nodeState.has(id)) {
+      nodeState.set(id, { deltaHistory: [], lastMeanAmp: null, lastSeen: now, frameCount: 0, entropy: 0 });
+    }
+    const ns = nodeState.get(id);
+    ns.lastSeen = now;
+    ns.frameCount++;
+
+    const meanAmp = amp.reduce((a,b) => a+b, 0) / amp.length;
+    ns.entropy = calcEntropy(amp);
+
+    // Spike detection
+    if (ns.lastMeanAmp !== null) {
+      const delta = Math.abs(meanAmp - ns.lastMeanAmp);
+      ns.deltaHistory.push(delta);
+      if (ns.deltaHistory.length > 40) ns.deltaHistory.shift();
+
+      if (ns.deltaHistory.length >= 10) {
+        const mean = ns.deltaHistory.reduce((a,b)=>a+b,0) / ns.deltaHistory.length;
+        const std = Math.sqrt(ns.deltaHistory.reduce((s,d) => s + (d-mean)**2, 0) / ns.deltaHistory.length);
+        const threshold = mean + SPIKE_THRESHOLD_MULTIPLIER * std;
+        if (delta > threshold && delta > 0.3) {
+          registerSpike(id, delta, now);
+        }
+      }
+    }
+    ns.lastMeanAmp = meanAmp;
+  });
+
+  updateNodes(realNodes, now);
+  document.getElementById('statNodes').textContent = [...nodeState.values()].filter(n => Date.now() - n.lastSeen < 5000).length;
+}
+
+// ── Real node detection ───────────────────────────────────────────────────────
+function calcEntropy(values) {
+  if (values.length < 10) return 0;
+  const diffs = [];
+  for (let i = 1; i < values.length; i++) diffs.push(Math.abs(values[i] - values[i-1]));
+  const mean = diffs.reduce((a,b)=>a+b,0) / diffs.length;
+  const variance = diffs.reduce((s,d) => s + (d-mean)**2, 0) / diffs.length;
+  return Math.sqrt(variance);
+}
+
+function isRealNode(n) {
+  const id = n.node_id || n.id;
+  const amp = n.amplitude || [];
+  if (amp.length < 52 || !id || id <= 0 || id >= 100) return false;
+
+  const entropy = calcEntropy(amp);
+  if (!csiHistory.has(id)) csiHistory.set(id, []);
+  const hist = csiHistory.get(id);
+  hist.push(entropy);
+  if (hist.length > 20) hist.shift();
+
+  if (hist.length < 5) return false;
+  const mean = hist.reduce((a,b)=>a+b,0) / hist.length;
+  const allSame = hist.every(e => e === hist[0]);
+  if (allSame) return false;
+  const entropyVariance = hist.reduce((s,e) => s + (e-mean)**2, 0) / hist.length;
+  return entropyVariance > ENTROPY_THRESHOLD && entropy > 0.5;
+}
+
+// ── Presence ──────────────────────────────────────────────────────────────────
+function updatePresence(level, conf) {
+  const orb = document.getElementById('presenceOrb');
+  const label = document.getElementById('presenceLabel');
+  const confEl = document.getElementById('presenceConf');
+
+  const map = {
+    absent:         { emoji:'👤', cls:'absent',  color:'var(--muted)',  text:'ABSENT' },
+    present_still:  { emoji:'🧍', cls:'present', color:'var(--green)',  text:'PRESENT' },
+    present_moving: { emoji:'🚶', cls:'present', color:'var(--blue)',   text:'MOVING' },
+    active:         { emoji:'🏃', cls:'active',  color:'var(--red)',    text:'ACTIVE' },
+  };
+  const info = map[level] || map.absent;
+
+  orb.textContent = info.emoji;
+  orb.className = 'presence-orb ' + info.cls;
+  label.textContent = info.text;
+  label.style.color = info.color;
+  confEl.textContent = Math.round(conf * 100) + '%';
+}
+
+// ── Motion bars ───────────────────────────────────────────────────────────────
+function updateMotion(score, level, variance) {
+  document.getElementById('motionScore').innerHTML =
+    `${score}<span style="font-size:16px;font-weight:400;color:var(--muted)">%</span>`;
+
+  const labelEl = document.getElementById('motionLabel');
+  const labelMap = {
+    absent:         ['label-absent', 'ABSENT'],
+    present_still:  ['label-still',  'STILL'],
+    present_moving: ['label-moving', 'MOVING'],
+    active:         ['label-active', 'ACTIVE'],
+  };
+  const [cls, text] = labelMap[level] || labelMap.absent;
+  labelEl.className = 'motion-label ' + cls;
+  labelEl.textContent = text;
+
+  // Animate bars
+  const normalized = Math.min(1, score / 100);
+  bars.forEach((b, i) => {
+    const threshold = i / BAR_COUNT;
+    const active = normalized > threshold;
+    const height = active ? Math.round(4 + (i / BAR_COUNT) * 40) : 4;
+    b.style.height = height + 'px';
+    if (active) {
+      if (normalized > 0.7) b.style.background = 'var(--red)';
+      else if (normalized > 0.4) b.style.background = 'var(--yellow)';
+      else b.style.background = 'var(--blue)';
+    } else {
+      b.style.background = '#1f2937';
+    }
+  });
+}
+
+// ── Breathing ─────────────────────────────────────────────────────────────────
+function updateBreathing(bpm, conf) {
+  const val = document.getElementById('breathVal');
+  const bar = document.getElementById('breathBar');
+
+  if (bpm && bpm > 4 && bpm < 40) {
+    val.textContent = Math.round(bpm);
+    val.style.color = (bpm >= 12 && bpm <= 20) ? 'var(--green)' : 'var(--yellow)';
+    const pct = ((bpm - 6) / (30 - 6)) * 100;
+    bar.style.width = pct + '%';
+    bar.style.background = (bpm >= 12 && bpm <= 20) ? 'var(--cyan)' : 'var(--yellow)';
+    breathHistory.push(bpm);
+    if (breathHistory.length > 60) breathHistory.shift();
+  } else {
+    val.textContent = '—';
+    val.style.color = 'var(--muted)';
+    bar.style.width = '0%';
+  }
+  drawBreathWave();
+}
+
+function drawBreathWave() {
+  const canvas = document.getElementById('breathCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.offsetWidth || 320;
+  canvas.width = w;
+  ctx.clearRect(0, 0, w, 40);
+  if (breathHistory.length < 2) return;
+
+  const min = Math.min(...breathHistory) - 1;
+  const max = Math.max(...breathHistory) + 1;
+  const range = max - min || 1;
+
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(6,182,212,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+
+  breathHistory.forEach((v, i) => {
+    const x = (i / (breathHistory.length - 1)) * w;
+    const y = 38 - ((v - min) / range) * 34;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// ── Nodes ─────────────────────────────────────────────────────────────────────
+function updateNodes(realNodes, now) {
+  const container = document.getElementById('nodeList');
+
+  if (realNodes.length === 0) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px">No real nodes detected</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  realNodes.forEach((n, i) => {
+    const id = n.node_id || n.id;
+    const color = NODE_COLORS[id % NODE_COLORS.length];
+    const ns = nodeState.get(id);
+    const age = ns ? (now - ns.lastSeen) : 9999;
+    const isLive = age < 5000;
+
+    const entropy = ns ? ns.entropy : 0;
+    const entropyPct = Math.min(100, (entropy / 5) * 100);
+
+    const row = document.createElement('div');
+    row.className = 'node-row' + (isLive ? ' live' : '');
+    row.innerHTML = `
+      <div class="node-id" style="background:${color}22;color:${color}">${id}</div>
+      <div class="node-info">
+        <div class="node-name" style="color:${color}">Node ${id}</div>
+        <div class="node-meta">Frames: ${ns?.frameCount || 0} · Entropy: ${entropy.toFixed(2)}</div>
+        <div class="node-entropy-bar">
+          <div class="node-entropy-fill" style="width:${entropyPct}%;background:${color}"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;font-weight:600;color:${isLive ? 'var(--green)' : 'var(--muted)'}">
+        ${isLive ? 'LIVE' : 'STALE'}
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// ── Spikes ────────────────────────────────────────────────────────────────────
+function registerSpike(nodeId, delta, now) {
+  spikeCount++;
+  document.getElementById('statSpikes').textContent = spikeCount;
+
+  const elapsed = ((now - startTime) / 1000).toFixed(1);
+  const color = NODE_COLORS[nodeId % NODE_COLORS.length];
+
+  spikes.unshift({ nodeId, delta, elapsed, color });
+  if (spikes.length > MAX_SPIKES) spikes.pop();
+
+  renderSpikes();
+}
+
+function renderSpikes() {
+  const feed = document.getElementById('spikeFeed');
+  feed.innerHTML = '';
+
+  if (spikes.length === 0) {
+    feed.innerHTML = '<div style="color:var(--muted);font-size:12px">No movement events yet…</div>';
+    return;
+  }
+
+  spikes.forEach(s => {
+    const intensity = Math.min(1, (s.delta - 0.3) / 3);
+    const dotColor = intensity > 0.6 ? 'var(--red)' : intensity > 0.3 ? 'var(--yellow)' : 'var(--cyan)';
+
+    const entry = document.createElement('div');
+    entry.className = 'spike-entry';
+    entry.innerHTML = `
+      <div class="spike-dot" style="background:${dotColor}"></div>
+      <span class="spike-time">t=${s.elapsed}s</span>
+      <span class="spike-node" style="color:${s.color}">Node ${s.nodeId}</span>
+      <span style="flex:1;color:var(--muted);font-size:10px">
+        ${intensity > 0.6 ? '🏃 strong movement' : intensity > 0.3 ? '👋 motion' : '· micro-movement'}
+      </span>
+      <span class="spike-delta">Δ${s.delta.toFixed(2)}</span>
+    `;
+    feed.appendChild(entry);
+  });
+}
+
+// ── Ticker (stats update even without new frames) ─────────────────────────────
+setInterval(() => {
+  const elapsed = (Date.now() - startTime) / 1000;
+  document.getElementById('statRate').textContent = Math.round(frames / Math.max(elapsed, 1));
+  drawBreathWave();
+}, 2000);
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+initViz();
+connect();
+</script>
+</body>
+</html>
