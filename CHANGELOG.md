@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **README: corrected the camera-supervised pose-accuracy claim.** The README stated
+  "92.9% PCK@20" for camera-supervised training; that figure does not appear in
+  ADR-079 and is ~2.6× the ADR's own success target (>35% PCK@20). ADR-079 phases
+  P7 (data collection), P8 (training + evaluation on real paired data) and P9
+  (cross-room LoRA) are still `Pending`, so no measured camera-supervised PCK@20 has
+  been published. README now states the proxy-supervised baseline (≈2.5%) and the
+  ADR-079 target (35%+), and notes the eval phases are pending. Surfaced by the
+  PowerPlatePulse training-pipeline audit (2026-05-11); 6 remaining audit findings
+  tracked in the PR.
+
+### Added
+- **`wifi-densepose-train`: `signal_features` module — wires `wifi-densepose-signal` into the training pipeline.** `wifi-densepose-signal` was previously a phantom dependency of `wifi-densepose-train` (listed in `Cargo.toml`, never imported). New `wifi_densepose_train::signal_features::extract_signal_features` (and `CsiSample::signal_features()`) run a windowed CSI observation's centre frame through `wifi_densepose_signal::features::FeatureExtractor`, producing a fixed-length (`FEATURE_LEN = 12`) amplitude/phase/PSD feature vector — the hook for a future vitals / multi-task supervision head (breathing- and heart-rate-band power are read off the PSD summary). The vector is produced on demand and not yet fed back into the loss. Surfaced by the 2026-05-11 training-pipeline audit (findings #1 "vitals features absent from training" and #2 "`wifi-densepose-signal` ghost dep").
+- **`wifi-densepose-train`: `TrainingConfig` subcarrier-layout presets + a real-loader integration test.** New `TrainingConfig::for_subcarriers(native, target)` plus named presets `ht40_192()` (≈192-sc ESP32 HT40 → 56) and `multiband_168()` (168-sc ADR-078 multi-band mesh → 56), so non-MM-Fi CSI shapes are first-class instead of requiring manual `native_subcarriers`/`num_subcarriers` overrides; field docs now list the supported source counts and the multi-NIC mapping. New `tests/test_real_loader.rs` round-trips synthetic CSI through `.npy` files → `MmFiDataset::discover`/`get` (including the subcarrier-interpolation branch and the empty-root case) — exercising the on-disk loader path the deterministic `verify-training` proof intentionally bypasses. Addresses training-pipeline audit findings #6 (56-sc/1-NIC config default) and #7 (multi-band mesh not in config); the #4 concern ("proof uses synthetic data") is reframed — the proof *should* use a reproducible source, and this test covers the real loader it skips.
+
+### Fixed
+- **HuggingFace `MODEL_CARD.md`: marked the PIR/BME280 environmental-sensor ground-truth path as planned, not implemented** (training-pipeline audit finding #3) — the card presented PIR/BME280 weak-label fine-tuning as a current capability; there is no env-sensor ingestion in the training pipeline today.
+- **README: corrected the camera-supervised pose-accuracy claim** (audit finding #5; see PR #535) — "92.9% PCK@20" → the ADR-079 target (35%+; proxy baseline 35.3%), noting P7/P8/P9 are pending.
+
 ### Added
 - **`nvsim` crate — deterministic NV-diamond magnetometer pipeline simulator** (ADR-089) —
   New standalone leaf crate at `v2/crates/nvsim` modeling a forward-only

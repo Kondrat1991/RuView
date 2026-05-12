@@ -9,7 +9,7 @@
 > **Beta Software** — Under active development. APIs and firmware may change. Known limitations:
 > - ESP32-C3 and original ESP32 are not supported (single-core, insufficient for CSI DSP)
 > - Single ESP32 deployments have limited spatial resolution — use 2+ nodes or add a [Cognitum Seed](https://cognitum.one) for best results
-> - Camera-free pose accuracy is limited — use [camera ground-truth training](docs/adr/ADR-079-camera-ground-truth-training.md) for 92.9% PCK@20
+> - Camera-free pose accuracy is limited (PCK@20 ≈ 2.5% with proxy labels) — [camera ground-truth training](docs/adr/ADR-079-camera-ground-truth-training.md) targets **35%+ PCK@20**; the pipeline is implemented, but the data-collection and evaluation phases (ADR-079 P7–P9) are still pending, so no measured camera-supervised PCK@20 has been published yet
 >
 > Contributions and bug reports welcome at [Issues](https://github.com/ruvnet/RuView/issues).
 
@@ -56,7 +56,7 @@ RuView also supports pose estimation (17 COCO keypoints via the WiFlow architect
 > | 🧱 **Through-wall** | Fresnel zone geometry + multipath modeling | Up to 5m depth |
 > | 🧠 **Edge intelligence** | 8-dim feature vectors + RVF store on Cognitum Seed | $140 total BOM |
 > | 🎯 **Camera-free training** | 10 sensor signals, no labels needed | 84s on M4 Pro |
-> | 📷 **Camera-supervised training** | MediaPipe + ESP32 CSI → 92.9% PCK@20 | 19 min on laptop |
+> | 📷 **Camera-supervised training** | MediaPipe + ESP32 CSI → **35%+ PCK@20 target** (ADR-079; eval phases pending) | ~19 min on laptop (pipeline) |
 > | 📡 **Multi-frequency mesh** | Channel hopping across 6 bands, neighbor APs as illuminators | 3x sensing bandwidth |
 > | 🌐 **3D point cloud** *(optional fusion)* | Camera depth (MiDaS) + WiFi CSI + mmWave radar → unified spatial model | 22 ms pipeline · 19K+ points/frame |
 
@@ -485,12 +485,41 @@ See [`docs/adr/ADR-024-contrastive-csi-embedding-model.md`](docs/adr/ADR-024-con
 
 ---
 
+## 🧩 Claude Code & Codex Plugin
+
+RuView ships a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin (and Codex prompt mirror) that wraps the whole workflow — onboarding, ESP32 setup, configuration, sensing apps, model training, advanced multistatic sensing, CLI/API/WASM, mmWave radar, and witness verification — as 9 skills, 7 `/ruview-*` commands, and 3 agents. It lives in [`plugins/ruview/`](plugins/ruview/README.md); the marketplace manifest is [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json) at the repo root.
+
+```bash
+# In Claude Code — add this repo as a plugin marketplace, then install:
+/plugin marketplace add ruvnet/RuView
+/plugin install ruview@ruview
+
+# Or try it for one session without installing (from a local clone of the repo):
+claude --plugin-dir ./plugins/ruview
+
+# Then, in Claude Code:
+#   /ruview-start      → onboarding (Docker demo / repo build / live ESP32)
+#   /ruview-flash      → build + flash ESP32 firmware
+#   /ruview-provision  → provision WiFi creds, sink IP, channel/MAC, mesh slots
+#   /ruview-app        → run a sensing application (presence / vitals / pose / sleep / MAT / point cloud)
+#   /ruview-train      → train / evaluate / publish a model (incl. GPU on GCloud)
+#   /ruview-advanced   → multistatic / tomography / cross-viewpoint / mesh-security
+#   /ruview-verify     → tests + deterministic proof + witness bundle
+```
+
+**Codex (OpenAI CLI):** `cp plugins/ruview/codex/prompts/*.md ~/.codex/prompts/` — the seven `/ruview-*` commands are mirrored as Codex prompts; [`plugins/ruview/codex/AGENTS.md`](plugins/ruview/codex/AGENTS.md) carries the project rules. See [`plugins/ruview/codex/README.md`](plugins/ruview/codex/README.md).
+
+Verify the plugin structure: `bash plugins/ruview/scripts/smoke.sh`. Full details: [`plugins/ruview/README.md`](plugins/ruview/README.md).
+
+---
+
 ## 📖 Documentation
 
 | Document | Description |
 |----------|-------------|
 | [User Guide](docs/user-guide.md) | Step-by-step guide: installation, first run, API usage, hardware setup, training |
 | [Build Guide](docs/build-guide.md) | Building from source (Rust and Python) |
+| [Claude Code / Codex Plugin](plugins/ruview/README.md) | The `ruview` plugin + marketplace — skills, `/ruview-*` commands, agents, and the Codex prompt mirror |
 | [Architecture Decisions](docs/adr/README.md) | 79 ADRs — why each technical choice was made, organized by domain (hardware, signal processing, ML, platform, infrastructure) |
 | [Domain Models](docs/ddd/README.md) | 7 DDD models (RuvSense, Signal Processing, Training Pipeline, Hardware Platform, Sensing Server, WiFi-Mat, CHCI) — bounded contexts, aggregates, domain events, and ubiquitous language |
 | [Desktop App](v2/crates/wifi-densepose-desktop/README.md) | **WIP** — Tauri v2 desktop app for node management, OTA updates, WASM deployment, and mesh visualization |
