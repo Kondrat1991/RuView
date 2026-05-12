@@ -4209,11 +4209,26 @@ async fn broadcast_tick_task(state: SharedState, tick_ms: u64) {
     loop {
         interval.tick().await;
         let s = state.read().await;
+
+        // Do not re-broadcast stale data — if ESP32 has gone offline, suppress.
+        if s.effective_source().ends_with(":offline") {
+            continue;
+        }
+
         if let Some(ref update) = s.latest_update {
             if s.tx.receiver_count() > 0 {
-                // Re-broadcast the latest sensing_update so pose WS clients
-                // always get data even when ESP32 pauses between frames.
-                if let Ok(json) = serde_json::to_string(update) {
+                // Strip nodes whose last_frame_time exceeds ESP32_OFFLINE_TIMEOUT
+                // so clients see an accurate node list even during re-broadcasts.
+                let now = std::time::Instant::now();
+                let mut trimmed = update.clone();
+                trimmed.nodes.retain(|n| {
+                    s.node_states.get(&(n.node_id as u8))
+                        .and_then(|ns| ns.last_frame_time)
+                        .map(|t| now.duration_since(t) < ESP32_OFFLINE_TIMEOUT)
+                        .unwrap_or(false)
+                });
+
+                if let Ok(json) = serde_json::to_string(&trimmed) {
                     let _ = s.tx.send(json);
                 }
             }
