@@ -3,7 +3,7 @@
 # Multi-stage build for minimal final image
 
 # Stage 1: Build
-FROM rust:1.85-bookworm AS builder
+FROM rustlang/rust:nightly-bookworm AS builder
 
 WORKDIR /build
 
@@ -13,6 +13,12 @@ COPY v2/crates/ ./crates/
 
 # Copy vendored RuVector crates
 COPY vendor/ruvector/ /build/vendor/ruvector/
+
+# Replace .is_multiple_of(n) with % n == 0 across all sources.
+# This mirrors the exact patch used in vendor/ruvector Dockerfiles to ensure
+# the crate compiles regardless of whether the feature is stable or nightly.
+RUN find crates /build/vendor -name "*.rs" -exec \
+    sed -i 's/\.is_multiple_of(\([^)]*\))/ % \1 == 0/g' {} \;
 
 # Build release binary
 RUN cargo build --release -p wifi-densepose-sensing-server 2>&1 \
@@ -56,6 +62,7 @@ ENV CSI_SOURCE=auto
 ENV MODELS_DIR=data/models
 
 COPY docker/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN sed -i 's/\r//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 # Exec-form ENTRYPOINT so Docker appends user arguments correctly.
 # Pass flags directly:  docker run <image> --source esp32 --tick-ms 500
