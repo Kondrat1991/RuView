@@ -11,7 +11,7 @@
 #      docker run ruvnet/wifi-densepose:latest --model /app/models/my.rvf
 #
 # Environment variables:
-#   CSI_SOURCE   — data source: auto (default), esp32, wifi, simulated
+#   CSI_SOURCE   — data source: esp32 (default), wifi
 #   MODELS_DIR   — directory to scan for .rvf model files (default: data/models)
 set -e
 
@@ -20,7 +20,7 @@ set -e
 #   docker run <image> --source esp32 --tick-ms 500
 if [ "${1#-}" != "$1" ] || [ -z "$1" ]; then
     set -- /app/sensing-server \
-        --source "${CSI_SOURCE:-auto}" \
+        --source "${CSI_SOURCE:-esp32}" \
         --tick-ms 100 \
         --ui-path /app/ui \
         --http-port 3000 \

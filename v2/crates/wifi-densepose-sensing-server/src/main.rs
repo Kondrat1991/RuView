@@ -1957,34 +1957,7 @@ async fn probe_esp32(port: u16) -> bool {
     }
 }
 
-// ── Simulated data generator ─────────────────────────────────────────────────
-
-fn generate_simulated_frame(tick: u64) -> Esp32Frame {
-    let t = tick as f64 * 0.1;
-    let n_sub = 56usize;
-    let mut amplitudes = Vec::with_capacity(n_sub);
-    let mut phases = Vec::with_capacity(n_sub);
-
-    for i in 0..n_sub {
-        let base = 15.0 + 5.0 * (i as f64 * 0.1 + t * 0.3).sin();
-        let noise = (i as f64 * 7.3 + t * 13.7).sin() * 2.0;
-        amplitudes.push((base + noise).max(0.1));
-        phases.push((i as f64 * 0.2 + t * 0.5).sin() * std::f64::consts::PI);
-    }
-
-    Esp32Frame {
-        magic: 0xC511_0001,
-        node_id: 1,
-        n_antennas: 1,
-        n_subcarriers: n_sub as u8,
-        freq_mhz: 2437,
-        sequence: tick as u32,
-        rssi: (-40.0 + 5.0 * (t * 0.2).sin()) as i8,
-        noise_floor: -90,
-        amplitudes,
-        phases,
-    }
-}
+// Simulation removed — server only runs with real ESP32 hardware (source=esp32).
 
 // ── WebSocket handler ────────────────────────────────────────────────────────
 
@@ -4080,125 +4053,12 @@ async fn udp_receiver_task(state: SharedState, udp_port: u16) {
     }
 }
 
-// ── Simulated data task ──────────────────────────────────────────────────────
+// ── Idle task (no hardware) ─────────────────────────────────────────────────
 
-async fn simulated_data_task(state: SharedState, tick_ms: u64) {
-    let mut interval = tokio::time::interval(Duration::from_millis(tick_ms));
-    info!("Simulated data source active (tick={}ms)", tick_ms);
-
-    loop {
-        interval.tick().await;
-
-        let mut s = state.write().await;
-        s.tick += 1;
-        let tick = s.tick;
-
-        let frame = generate_simulated_frame(tick);
-
-        // Append current amplitudes to history before feature extraction.
-        s.frame_history.push_back(frame.amplitudes.clone());
-        if s.frame_history.len() > FRAME_HISTORY_CAPACITY {
-            s.frame_history.pop_front();
-        }
-
-        let sample_rate_hz = 1000.0 / tick_ms as f64;
-        let (features, mut classification, breathing_rate_hz, sub_variances, raw_motion) =
-            extract_features_from_frame(&frame, &s.frame_history, sample_rate_hz);
-        smooth_and_classify(&mut s, &mut classification, raw_motion);
-    adaptive_override(&s, &features, &mut classification);
-
-        s.rssi_history.push_back(features.mean_rssi);
-        if s.rssi_history.len() > 60 {
-            s.rssi_history.pop_front();
-        }
-
-        let motion_score = if classification.motion_level == "active" { 0.8 }
-            else if classification.motion_level == "present_still" { 0.3 }
-            else { 0.05 };
-
-        let raw_vitals = s.vital_detector.process_frame(
-            &frame.amplitudes,
-            &frame.phases,
-        );
-        let vitals = smooth_vitals(&mut s, &raw_vitals);
-        s.latest_vitals = vitals.clone();
-
-        let frame_amplitudes = frame.amplitudes.clone();
-        let frame_n_sub = frame.n_subcarriers;
-
-        // Multi-person estimation with temporal smoothing (EMA α=0.10).
-        let raw_score = compute_person_score(&features);
-        s.smoothed_person_score = s.smoothed_person_score * 0.90 + raw_score * 0.10;
-        let est_persons = if classification.presence {
-            let count = s.person_count();
-            s.prev_person_count = count;
-            count
-        } else {
-            s.prev_person_count = 0;
-            0
-        };
-
-        let mut update = SensingUpdate {
-            msg_type: "sensing_update".to_string(),
-            timestamp: chrono::Utc::now().timestamp_millis() as f64 / 1000.0,
-            source: "simulated".to_string(),
-            tick,
-            nodes: vec![NodeInfo {
-                node_id: 1,
-                rssi_dbm: features.mean_rssi,
-                position: [2.0, 0.0, 1.5],
-                amplitude: frame_amplitudes,
-                subcarrier_count: frame_n_sub as usize,
-            }],
-            features: features.clone(),
-            classification,
-            signal_field: generate_signal_field(
-                features.mean_rssi, motion_score, breathing_rate_hz,
-                features.variance.min(1.0), &sub_variances,
-            ),
-            vital_signs: Some(vitals),
-            enhanced_motion: None,
-            enhanced_breathing: None,
-            posture: None,
-            signal_quality_score: None,
-            quality_verdict: None,
-            bssid_count: None,
-            pose_keypoints: None,
-            model_status: if s.model_loaded {
-                Some(serde_json::json!({
-                    "loaded": true,
-                    "layers": s.progressive_loader.as_ref()
-                        .map(|l| { let (a,b,c) = l.layer_status(); a as u8 + b as u8 + c as u8 })
-                        .unwrap_or(0),
-                    "sona_profile": s.active_sona_profile.as_deref().unwrap_or("default"),
-                }))
-            } else {
-                None
-            },
-            persons: None,
-            estimated_persons: if est_persons > 0 { Some(est_persons) } else { None },
-            node_features: None,
-        };
-
-        // Populate persons from the sensing update (Kalman-smoothed via tracker).
-        let raw_persons = derive_pose_from_sensing(&update);
-        let mut last_tracker_instant = s.last_tracker_instant.take();
-        let tracked = tracker_bridge::tracker_update(
-            &mut s.pose_tracker, &mut last_tracker_instant, raw_persons,
-        );
-        s.last_tracker_instant = last_tracker_instant;
-        if !tracked.is_empty() {
-            update.persons = Some(tracked);
-        }
-
-        if update.classification.presence {
-            s.total_detections += 1;
-        }
-        if let Ok(json) = serde_json::to_string(&update) {
-            let _ = s.tx.send(json);
-        }
-        s.latest_update = Some(update);
-    }
+async fn no_hardware_task(_state: SharedState, _tick_ms: u64) {
+    warn!("No hardware source configured. Connect an ESP32 and restart with --source esp32.");
+    // Park the task permanently — no simulated data emitted.
+    std::future::pending::<()>().await;
 }
 
 // ── Broadcast tick task (for ESP32 mode, sends buffered state) ───────────────
@@ -4690,8 +4550,8 @@ async fn main() {
                 info!("  Windows WiFi detected");
                 "wifi"
             } else {
-                info!("  No hardware detected, using simulation");
-                "simulate"
+                info!("  No hardware detected — waiting for ESP32 on UDP :{}", args.udp_port);
+                "esp32"
             }
         }
         other => other,
@@ -4868,7 +4728,9 @@ async fn main() {
             tokio::spawn(windows_wifi_task(state.clone(), args.tick_ms));
         }
         _ => {
-            tokio::spawn(simulated_data_task(state.clone(), args.tick_ms));
+            warn!("Unknown source '{}' — defaulting to esp32 mode (UDP listener active)", source);
+            tokio::spawn(udp_receiver_task(state.clone(), args.udp_port));
+            tokio::spawn(broadcast_tick_task(state.clone(), args.tick_ms));
         }
     }
 
